@@ -1,6 +1,6 @@
 # ShipNow API
 
-API REST de ShipNow con **arquitectura por capas** (Controller → Service → Repository), **configuración de entorno validada** al arranque y un **módulo de mocking** para generar y cargar datos de prueba.
+API REST de ShipNow con **arquitectura por capas** (Controller → Service → Repository), **configuración de entorno validada** al arranque, un **módulo de mocking** para generar y cargar datos de prueba y un **manejo de errores centralizado**.
 
 ## Requisitos
 
@@ -54,8 +54,10 @@ Si falta alguna variable (por ejemplo `MONGODB_URI`), la app lanza un error desc
 | POST | `/api/users` | Crea un usuario |
 | PUT | `/api/users/:id` | Actualiza un usuario |
 | DELETE | `/api/users/:id` | Elimina un usuario |
-| GET | `/api/mocks/...` | Datos simulados, **no se guardan** (ver más abajo) |
-| POST | `/api/mocks/seed` | Inserta datos de prueba en MongoDB (ver más abajo) |
+| GET | `/api/orders` | Lista pedidos (útil para ver los datos cargados con mocks) |
+| GET | `/api/orders/:id` | Detalle de un pedido |
+| GET | `/api/mocks/...` | Datos simulados, **no se guardan** (ver módulo de mocking) |
+| POST | `/api/mocks/seed` | Inserta datos de prueba en MongoDB (ver módulo de mocking) |
 
 Ejemplos de body:
 
@@ -73,13 +75,14 @@ Ejemplos de body:
 src/
 ├── config/          # env.config.js (validación de .env), db.js (conexión)
 ├── constants/       # roles, estados, prioridades, límites de mocks (Object.freeze)
-├── controllers/     # Capa HTTP: req/res y status codes
-├── services/        # Lógica de negocio (incluye la generación de mocks)
+├── controllers/     # Capa HTTP: req/res; los errores se derivan con next(error)
+├── services/        # Lógica de negocio: validan y lanzan errores del dominio
 ├── repositories/    # Único lugar que conoce Mongoose
 ├── models/          # Solo esquemas: user, product, order, delivery
+├── errors/          # Diccionario de errores, AppError, errores del dominio y normalizador
+├── middlewares/     # error.middleware.js: único lugar que responde errores
 ├── routes/          # Solo conectan path → método del Controller
-├── middlewares/     # Manejo centralizado de errores
-└── utils/           # AppError, mockData (listas y helpers aleatorios), alias de constantes
+└── utils/           # mockData (listas y helpers), validators, alias de constantes
 ```
 
 Flujo de dependencias: `Route → Controller → Service → Repository → Model`.
@@ -88,10 +91,8 @@ El Controller nunca importa Mongoose, y `process.env` solo se lee en `src/config
 ## Por qué separé la lógica entre Service y Repository
 
 - **Repository**: encapsula *cómo* se accede a los datos. Sabe de Mongoose, proyecciones (por ejemplo, nunca devuelve el hash de `password`), orden por defecto, `.lean()` y validación de `ObjectId`. Si mañana cambiara la base de datos, solo se tocaría esta capa.
-- **Service**: contiene las *reglas de negocio*: el listado público de productos solo muestra los que tienen stock, el estado (`AVAILABLE` / `OUT_OF_STOCK`) se deriva del stock y no se setea a mano, el email de usuario debe ser único, se valida el rol contra `USER_ROLES` y la contraseña se hashea con bcrypt antes de guardarse.
-- **Controller**: traduce HTTP ↔ Service (lee `req`, devuelve el status code apropiado) y delega los errores al middleware.
-
-Así cada capa tiene una sola responsabilidad y se puede probar o cambiar sin afectar a las demás.
+- **Service**: contiene las *reglas de negocio* y detecta los errores: valida los datos, comprueba que el recurso exista y lanza el error del dominio que corresponde.
+- **Controller**: traduce HTTP ↔ Service (lee `req`, devuelve el status code de éxito) y deriva cualquier error al middleware con `next(error)`.
 
 ## Constantes
 
@@ -105,6 +106,128 @@ ORDER_STATUS      // PENDING, IN_PROGRESS, DELIVERED, CANCELLED
 ORDER_PRIORITY    // LOW, NORMAL, HIGH, URGENT
 DELIVERY_STATUS   // PENDING, ASSIGNED, IN_TRANSIT, DELIVERED
 PRODUCT_STATUS    // AVAILABLE, OUT_OF_STOCK
+```
+
+---
+
+# Manejo de errores
+
+Todo el manejo de errores pasa por una capa común (`src/errors/` + `src/middlewares/error.middleware.js`):
+
+1. **Los services detectan el problema** y lanzan un error personalizado del dominio (por ejemplo `UserNotFoundError`, `InvalidQuantityError`).
+2. **El controller no responde errores**: solo hace `next(error)`.
+3. **El middleware global es el único que responde.** Convierte cualquier error en una respuesta HTTP con la misma estructura.
+
+Piezas:
+
+| Archivo | Rol |
+|---------|-----|
+| `errors/error.dictionary.js` | Diccionario: para cada código de error, su status HTTP y su mensaje |
+| `errors/AppError.js` | Error base: se crea con un código del diccionario (status y mensaje salen de ahí) |
+| `errors/domain.errors.js` | Errores del dominio: `UserNotFoundError`, `ProductNotFoundError`, `OrderNotFoundError`, `EmailAlreadyExistsError`, `InvalidRoleError`, `InvalidStatusError`, `InvalidQuantityError`, `NegativeValueError`, `MockSeedError`, etc. |
+| `errors/error.normalizer.js` | Traduce errores externos (JSON mal formado, validación o `_id` inválido de Mongoose, clave duplicada, base de datos caída) a errores de la app. Cualquier error inesperado se convierte en `INTERNAL_ERROR` sin exponer detalles |
+| `middlewares/error.middleware.js` | `errorHandler` (respuesta uniforme) y `notFoundHandler` (rutas inexistentes) |
+
+## Estructura de la respuesta de error
+
+Todos los errores responden con el mismo formato (`details` es `null` cuando no hay información extra):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_QUANTITY",
+    "message": "La cantidad \"0\" no es válida: debe ser un número entero entre 1 y 100.",
+    "status": 400,
+    "details": { "received": "0", "min": 1, "max": 100, "reason": "OUT_OF_RANGE" },
+    "path": "/api/mocks/users?qty=0",
+    "method": "GET",
+    "timestamp": "2026-10-17T22:10:24.173Z"
+  }
+}
+```
+
+Los errores de servidor (5xx) se registran en la consola con su causa original, pero esa información nunca se envía al cliente.
+
+## Catálogo de errores
+
+| Código | Status | Cuándo ocurre |
+|--------|--------|---------------|
+| `VALIDATION_ERROR` | 400 | Faltan campos o tienen tipo incorrecto (`details.errors` lista cada campo) |
+| `INVALID_JSON` | 400 | El body no es un JSON válido |
+| `INVALID_ID` | 400 | El id no tiene formato de ObjectId |
+| `NEGATIVE_VALUE` | 400 | Valor negativo (precio, stock o `qty` de mocks) |
+| `INVALID_ROLE` / `INVALID_STATUS` / `INVALID_PRIORITY` | 400 | Valor fuera de `USER_ROLES` / `ORDER_STATUS` / `ORDER_PRIORITY` |
+| `INVALID_QUANTITY` | 400 | `qty` no numérico, no entero o fuera de 1–100 (`details.reason`: `NOT_A_NUMBER`, `NOT_AN_INTEGER`, `OUT_OF_RANGE`) |
+| `INVALID_MOCK_ENTITY` | 400 | `entity` no permitida en `/api/mocks/seed` |
+| `SEED_DISABLED` | 403 | Carga de mocks con `NODE_ENV=production` |
+| `USER_NOT_FOUND` / `PRODUCT_NOT_FOUND` / `ORDER_NOT_FOUND` | 404 | No existe el recurso |
+| `ROUTE_NOT_FOUND` | 404 | La ruta no existe |
+| `EMAIL_ALREADY_EXISTS` | 409 | Ya hay un usuario con ese email |
+| `DUPLICATE_KEY` | 409 | Se viola un índice único en la base |
+| `MOCK_DEPENDENCY_MISSING` | 409 | Faltan datos previos para cargar mocks (clientes, repartidores o pedidos) |
+| `MOCK_SEED_FAILED` | 500 | Falló la inserción en MongoDB durante la carga de mocks |
+| `DATABASE_UNAVAILABLE` | 503 | La base de datos no responde |
+| `INTERNAL_ERROR` | 500 | Error inesperado |
+
+## Cómo probar los casos inválidos
+
+Con el servidor corriendo (`npm run dev`). Los GET se pueden pegar en el navegador; los demás, con `curl` en una segunda terminal (en cmd de Windows las comillas son necesarias; en PowerShell usar `curl.exe`).
+
+**Módulo de mocks**
+
+| Prueba | Resultado esperado |
+|--------|--------------------|
+| `GET /api/mocks/users?qty=0` | 400 `INVALID_QUANTITY` (`OUT_OF_RANGE`) |
+| `GET /api/mocks/users?qty=1000` | 400 `INVALID_QUANTITY` (`OUT_OF_RANGE`) |
+| `GET /api/mocks/users?qty=abc` | 400 `INVALID_QUANTITY` (`NOT_A_NUMBER`) |
+| `GET /api/mocks/users?qty=2.5` | 400 `INVALID_QUANTITY` (`NOT_AN_INTEGER`) |
+| `GET /api/mocks/users?qty=-5` | 400 `NEGATIVE_VALUE` |
+| `GET /api/mocks/users?qty=3&role=cliente` | 400 `INVALID_ROLE` |
+| `GET /api/mocks/orders?qty=3&status=FOO` | 400 `INVALID_STATUS` |
+| `GET /api/mocks/orders?qty=3&priority=FOO` | 400 `INVALID_PRIORITY` |
+
+```bash
+curl -X POST "http://localhost:3000/api/mocks/seed?qty=-3"
+# 400 NEGATIVE_VALUE
+
+curl -X POST "http://localhost:3000/api/mocks/seed?qty=5&entity=foo"
+# 400 INVALID_MOCK_ENTITY
+
+curl -X POST "http://localhost:3000/api/mocks/seed?qty=5&entity=orders"
+# 409 MOCK_DEPENDENCY_MISSING (si todavía no hay clientes cargados en la base)
+```
+
+- **Carga en producción**: iniciar con `NODE_ENV=production` y hacer `POST /api/mocks/seed?qty=5` → 403 `SEED_DISABLED`.
+- **Falla de MongoDB durante la carga**: con el servicio de MongoDB detenido (o una URI sin acceso), `POST /api/mocks/seed?qty=5` → 500 `MOCK_SEED_FAILED` con `details.entity` y `details.reason`. Puede tardar unos segundos hasta que Mongoose agota el tiempo de espera.
+
+**Usuarios, productos y pedidos**
+
+```bash
+# Ruta inexistente → 404 ROUTE_NOT_FOUND
+curl "http://localhost:3000/api/nada"
+
+# Id con formato inválido → 400 INVALID_ID
+curl "http://localhost:3000/api/users/abc"
+
+# Id válido pero inexistente → 404 USER_NOT_FOUND (idem PRODUCT_NOT_FOUND / ORDER_NOT_FOUND)
+curl "http://localhost:3000/api/users/64b000000000000000000000"
+curl "http://localhost:3000/api/orders/64b000000000000000000000"
+
+# Body sin campos obligatorios → 400 VALIDATION_ERROR (details.errors lista name y price)
+curl -X POST http://localhost:3000/api/products -H "Content-Type: application/json" -d "{}"
+
+# Precio negativo → 400 NEGATIVE_VALUE
+curl -X POST http://localhost:3000/api/products -H "Content-Type: application/json" -d "{\"name\":\"Caja\",\"price\":-5}"
+
+# JSON mal formado → 400 INVALID_JSON
+curl -X POST http://localhost:3000/api/products -H "Content-Type: application/json" -d "{malo"
+
+# Rol inválido → 400 INVALID_ROLE
+curl -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d "{\"name\":\"Ana\",\"email\":\"ana@mail.com\",\"password\":\"secreto123\",\"role\":\"cliente\"}"
+
+# Mismo email dos veces → la segunda da 409 EMAIL_ALREADY_EXISTS
+curl -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d "{\"name\":\"Ana\",\"email\":\"ana@mail.com\",\"password\":\"secreto123\"}"
 ```
 
 ---
@@ -129,7 +252,7 @@ Reglas que respetan los datos generados:
 - Hay una entrega por pedido, salvo los pedidos `CANCELLED`, que no tienen entrega.
 - El estado de la entrega es coherente con el del pedido: `PENDING` → entrega `PENDING` (sin repartidor, `driver: null`); `IN_PROGRESS` → `ASSIGNED` o `IN_TRANSIT`; `DELIVERED` → `DELIVERED` (con `deliveredAt`).
 - Las entregas que ya no están `PENDING` tienen un repartidor (`role: DRIVER`) asignado.
-- `qty` se limita entre 1 y 100 (por defecto 10).
+- `qty` se limita entre 1 y 100 (por defecto 10). Los valores inválidos responden con el error correspondiente (ver *Manejo de errores*).
 
 ## Endpoints que devuelven datos simulados (no guardan nada)
 
@@ -139,7 +262,7 @@ Se pueden probar directamente desde el navegador:
 |--------|------|----------|
 | GET | `/api/mocks/users?qty=2` | Usuarios con roles mezclados. Opcional: `&role=USER`, `&role=DRIVER` o `&role=ADMIN` |
 | GET | `/api/mocks/drivers?qty=3` | Repartidores (`role: DRIVER`) |
-| GET | `/api/mocks/orders?qty=5` | Pedidos con estados y prioridades válidos |
+| GET | `/api/mocks/orders?qty=5` | Pedidos con estados y prioridades válidos. Opcional: `&status=PENDING`, `&priority=URGENT` |
 | GET | `/api/mocks/deliveries?qty=5` | Entregas asociadas a pedidos y repartidores del mismo conjunto |
 | GET | `/api/mocks/dataset?qty=5` | Todo junto y consistente: `{ users, drivers, orders, deliveries }` (`qty` = cantidad de pedidos) |
 
@@ -179,17 +302,15 @@ curl -X POST "http://localhost:3000/api/mocks/seed?qty=20&entity=all"
 # → {"insertados":..., "colecciones":{"users":..,"orders":20,"deliveries":..}}
 ```
 
-En PowerShell usar `curl.exe` en lugar de `curl`. También se puede probar con Postman o Thunder Client.
-
 Notas:
 
 - Todos los usuarios de prueba tienen la contraseña `Test1234` (se guarda hasheada con bcrypt).
 - La carga está **deshabilitada con `NODE_ENV=production`** (responde 403).
-- Un `qty` inválido (0, mayor a 100, no numérico) responde 400 con un mensaje descriptivo, igual que una `entity` o un `role` no permitidos.
+- Si falla la inserción en MongoDB, responde 500 `MOCK_SEED_FAILED`; puede haber quedado una carga parcial.
 - Para limpiar los datos de prueba, borrar las colecciones desde MongoDB Compass o `mongosh`.
 
 ### Flujo recomendado para probar
 
 1. `GET /api/mocks/dataset?qty=5` para ver la forma de los datos sin tocar la base.
 2. `POST /api/mocks/seed?qty=20&entity=all` para cargar un conjunto completo.
-3. Comprobar en MongoDB las colecciones `users`, `orders` y `deliveries`.
+3. `GET /api/orders` para ver los pedidos cargados, y comprobar en MongoDB las colecciones `users`, `orders` y `deliveries`.

@@ -40,6 +40,7 @@ export const HTTP_STATUS = Object.freeze({
   NOT_FOUND: 404,
   CONFLICT: 409,
   INTERNAL_SERVER_ERROR: 500,
+  SERVICE_UNAVAILABLE: 503,
 });
 
 // Entidades que se pueden generar / cargar desde /api/mocks
@@ -53,6 +54,7 @@ export const MOCK_ENTITIES = Object.freeze({
 
 // Límites y valores por defecto del módulo de mocking
 export const MOCK_CONFIG = Object.freeze({
+  MIN_QTY: 1,
   DEFAULT_QTY: 10,
   MAX_QTY: 100,
   PASSWORD: 'Test1234', // contraseña de todos los usuarios de prueba

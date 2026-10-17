@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { OrderModel } from '../models/order.model.js';
 
 const DEFAULT_PROJECTION = '-__v';
@@ -8,6 +9,11 @@ export const OrderRepository = {
       .sort({ createdAt: -1 })
       .limit(limit)
       .lean();
+  },
+
+  async getById(id) {
+    if (!mongoose.isValidObjectId(id)) return null;
+    return OrderModel.findById(id, DEFAULT_PROJECTION).lean();
   },
 
   async insertMany(orders) {

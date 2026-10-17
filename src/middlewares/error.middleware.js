@@ -1,34 +1,35 @@
-import config from '../config/index.js';
-import { HTTP_STATUS } from '../constants/index.js';
+import { toAppError } from '../errors/error.normalizer.js';
+import { RouteNotFoundError } from '../errors/domain.errors.js';
 
-// Manejo centralizado de errores. No importa Mongoose: detecta sus errores por nombre/código.
-// eslint-disable-next-line no-unused-vars
-export function errorHandler(err, req, res, next) {
-  let statusCode = err.statusCode;
-  let message = err.message;
-
-  if (!statusCode) {
-    if (err.name === 'ValidationError') {
-      statusCode = HTTP_STATUS.BAD_REQUEST;
-    } else if (err.name === 'CastError') {
-      statusCode = HTTP_STATUS.BAD_REQUEST;
-      message = 'Identificador inválido.';
-    } else if (err.code === 11000) {
-      statusCode = HTTP_STATUS.CONFLICT;
-      message = 'Ya existe un registro con ese valor único.';
-    } else {
-      statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
-      message = 'Error interno del servidor.';
-      console.error(err);
-    }
-  }
-
-  res.status(statusCode).json({
-    error: message,
-    ...(config.isProduction ? {} : { stack: err.stack }),
-  });
+// Rutas que no existen: se derivan al manejador global como cualquier error.
+export function notFoundHandler(req, res, next) {
+  next(new RouteNotFoundError(req.method, req.originalUrl));
 }
 
-export function notFoundHandler(req, res) {
-  res.status(HTTP_STATUS.NOT_FOUND).json({ error: `Ruta no encontrada: ${req.method} ${req.originalUrl}` });
+// Único lugar de la API que arma respuestas de error.
+// Estructura uniforme:
+// { success: false, error: { code, message, status, details, path, method, timestamp } }
+// eslint-disable-next-line no-unused-vars
+export function errorHandler(err, req, res, next) {
+  if (res.headersSent) return next(err);
+
+  const appError = toAppError(err);
+
+  // Los errores de servidor se registran con su causa original; el cliente no la ve.
+  if (appError.statusCode >= 500) {
+    console.error(`[Error] ${req.method} ${req.originalUrl}`, appError.cause ?? appError);
+  }
+
+  return res.status(appError.statusCode).json({
+    success: false,
+    error: {
+      code: appError.code,
+      message: appError.message,
+      status: appError.statusCode,
+      details: appError.details ?? null,
+      path: req.originalUrl,
+      method: req.method,
+      timestamp: new Date().toISOString(),
+    },
+  });
 }

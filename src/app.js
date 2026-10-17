@@ -1,6 +1,7 @@
 import express from 'express';
 import productRoutes from './routes/product.routes.js';
 import userRoutes from './routes/user.routes.js';
+import orderRoutes from './routes/order.routes.js';
 import mockRoutes from './routes/mock.routes.js';
 import { errorHandler, notFoundHandler } from './middlewares/error.middleware.js';
 
@@ -11,6 +12,7 @@ app.use(express.json());
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/products', productRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/orders', orderRoutes);
 app.use('/api/mocks', mockRoutes);
 
 app.use(notFoundHandler);
