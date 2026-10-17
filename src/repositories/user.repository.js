@@ -30,6 +30,15 @@ export const UserRepository = {
     });
   },
 
+  async getByRole(role, { limit = 100 } = {}) {
+    return UserModel.find({ role }, SAFE_PROJECTION).limit(limit).lean();
+  },
+
+  async insertMany(users) {
+    const inserted = await UserModel.insertMany(users);
+    return inserted.length;
+  },
+
   async update(id, data) {
     if (!mongoose.isValidObjectId(id)) return null;
     return UserModel.findByIdAndUpdate(id, data, {
