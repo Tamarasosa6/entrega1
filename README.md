@@ -58,6 +58,12 @@ Si falta alguna variable (por ejemplo `MONGODB_URI`), la app lanza un error desc
 | GET | `/api/orders` | Lista pedidos (útil para ver los datos cargados con mocks) |
 | GET | `/api/orders/:id` | Detalle de un pedido |
 | POST | `/api/orders` | Crea un pedido (el total y el estado inicial los calcula el servidor) |
+| PATCH | `/api/orders/:id/status` | Cambia el estado de un pedido (`PENDING`, `IN_PROGRESS`, `DELIVERED`, `CANCELLED`) |
+| GET | `/api/deliveries` | Lista entregas |
+| GET | `/api/deliveries/:id` | Detalle de una entrega |
+| PATCH | `/api/deliveries/:id/status` | Cambia el estado de una entrega (y asigna repartidor si corresponde) |
+| GET | `/api/docs` | **Documentación interactiva (Swagger UI)** |
+| GET | `/api/docs/json` | Especificación OpenAPI en JSON |
 | GET | `/api/logger/test` | Emite un log de cada nivel para verificar el logger (deshabilitado en producción) |
 | GET | `/api/mocks/...` | Datos simulados, **no se guardan** (ver módulo de mocking) |
 | POST | `/api/mocks/seed` | Inserta datos de prueba en MongoDB (ver módulo de mocking) |
@@ -90,6 +96,7 @@ src/
 ├── services/        # Lógica de negocio: validan y lanzan errores del dominio
 ├── repositories/    # Único lugar que conoce Mongoose
 ├── models/          # Solo esquemas: user, product, order, delivery
+├── docs/            # Documentación OpenAPI/Swagger (separada de las rutas)
 ├── errors/          # Diccionario de errores, AppError, errores del dominio y normalizador
 ├── logger/          # Logger centralizado (Winston): niveles, consola, archivos y rotación
 ├── middlewares/     # error.middleware.js (responde y registra errores), requestLogger.middleware.js
@@ -120,6 +127,68 @@ ORDER_PRIORITY    // LOW, NORMAL, HIGH, URGENT
 DELIVERY_STATUS   // PENDING, ASSIGNED, IN_TRANSIT, DELIVERED
 PRODUCT_STATUS    // AVAILABLE, OUT_OF_STOCK
 ```
+
+---
+
+# Documentación de la API (Swagger)
+
+La API está documentada con **OpenAPI 3.0** y se puede consultar y probar desde el navegador con **Swagger UI**.
+
+| Ruta | Qué muestra |
+|------|-------------|
+| **`http://localhost:3000/api/docs`** | Swagger UI (interactivo, con "Try it out") |
+| `http://localhost:3000/api/docs/json` | La especificación OpenAPI en JSON (se puede importar en Postman) |
+
+## Cómo verla
+
+1. Levantá el servidor como se explica arriba (`npm install`, completar `.env`, `npm run dev`; MongoDB tiene que estar corriendo).
+2. Abrí `http://localhost:3000/api/docs` (el puerto es el de tu `PORT`).
+3. Elegí un endpoint, tocá **Try it out**, completá los datos y **Execute**.
+
+## Qué está documentado
+
+Los endpoints están agrupados por tags:
+
+| Tag | Endpoints |
+|-----|-----------|
+| **Users** | listar, obtener, crear, actualizar y eliminar |
+| **Products** | listar, obtener, crear, actualizar y eliminar |
+| **Orders** | listar, obtener, crear y cambiar estado |
+| **Deliveries** | listar, obtener y cambiar estado |
+| **Mocks** | usuarios, repartidores, pedidos, entregas y dataset simulados; carga de datos de prueba (`/seed`) |
+| **Logger** | `GET /api/logger/test` (herramienta interna de validación, no es funcionalidad de negocio) |
+| **Health** | `GET /health` |
+
+De cada endpoint se documenta el método, la ruta, la descripción, los parámetros de ruta y query, el body esperado (con ejemplo), la respuesta exitosa y los errores posibles.
+
+**Schemas reutilizables** (sección *Schemas* al final de la página): `User`, `Product`, `Order`, `OrderItem`, `Delivery`, `ErrorResponse`, `SuccessMessage`, los bodies de entrada (`UserCreate`, `OrderCreate`, `DeliveryStatusUpdate`, etc.) y los de mocks y logger.
+
+**Errores:** todas las respuestas de error usan el schema `ErrorResponse` (la estructura descripta en *Manejo de errores*) y cada endpoint muestra un ejemplo por cada código que puede devolver: datos inválidos (`VALIDATION_ERROR`, `NEGATIVE_VALUE`), id inválido, recurso no encontrado, conflicto (`EMAIL_ALREADY_EXISTS`), cantidad inválida en mocks (`INVALID_QUANTITY`), estado inválido en pedidos y entregas (`INVALID_STATUS`), error interno (500) y base de datos no disponible (503). Los ejemplos se generan a partir de las mismas clases de error que usa la API, así que coinciden con las respuestas reales.
+
+## Aclaraciones para probar
+
+- **Sin autenticación:** esta versión no tiene login ni tokens, por eso no hay esquemas de seguridad documentados.
+- **Ids:** para probar `GET /api/users/{id}`, `PATCH /api/orders/{id}/status`, etc., necesitás un id real. Cargá datos con `POST /api/mocks/seed` (`entity=all`), listalos con `GET /api/users`, `GET /api/orders` o `GET /api/deliveries` y copiá un `_id`.
+- **Flujo sugerido:** `POST /api/mocks/seed?qty=10&entity=all` → `GET /api/orders` → `PATCH /api/orders/{id}/status` con `{ "status": "IN_PROGRESS" }` → `GET /api/deliveries` → `PATCH /api/deliveries/{id}/status` con `{ "status": "ASSIGNED", "driver": "<id de un usuario DRIVER>" }`.
+- **`/api/mocks/seed` no recibe body:** la cantidad y la entidad se envían por query (`qty`, `entity`).
+- **Cantidades inválidas en mocks:** `qty` está documentado como entero entre 1 y 100, y Swagger UI puede bloquear valores como `abc` antes de enviarlos. Para ver los errores `INVALID_QUANTITY` / `NEGATIVE_VALUE` abrí la URL directamente en el navegador (por ejemplo `http://localhost:3000/api/mocks/users?qty=0`).
+- **Entregas:** `PENDING` no admite repartidor; `ASSIGNED`, `IN_TRANSIT` y `DELIVERED` requieren uno con rol `DRIVER` (se envía en `driver` o ya debe estar asignado). `DELIVERED` registra `deliveredAt`.
+- **Producción:** `/api/mocks/seed` y `/api/logger/test` responden 403 con `NODE_ENV=production`.
+
+## Cómo está organizada (separada de las rutas)
+
+La documentación vive en `src/docs/` y no se mezcla con `src/routes/`:
+
+```
+src/docs/
+├── openapi.js           # Especificación: info, servidor, tags y armado final
+├── docs.router.js       # Monta Swagger UI en /api/docs
+├── schemas.js           # Schemas y parámetros reutilizables
+├── helpers.js           # Arma las respuestas de error a partir de las clases reales
+└── paths/               # Endpoints por módulo (catálogo, pedidos/entregas, mocks/logger/health)
+```
+
+Si se agrega o modifica un endpoint, se actualiza el archivo correspondiente en `src/docs/paths/`.
 
 ---
 
@@ -258,7 +327,7 @@ Los errores de servidor (5xx) se registran en la consola con su causa original, 
 | `INVALID_QUANTITY` | 400 | `qty` no numérico, no entero o fuera de 1–100 (`details.reason`: `NOT_A_NUMBER`, `NOT_AN_INTEGER`, `OUT_OF_RANGE`) |
 | `INVALID_MOCK_ENTITY` | 400 | `entity` no permitida en `/api/mocks/seed` |
 | `SEED_DISABLED` | 403 | Carga de mocks con `NODE_ENV=production` |
-| `USER_NOT_FOUND` / `PRODUCT_NOT_FOUND` / `ORDER_NOT_FOUND` | 404 | No existe el recurso |
+| `USER_NOT_FOUND` / `PRODUCT_NOT_FOUND` / `ORDER_NOT_FOUND` / `DELIVERY_NOT_FOUND` | 404 | No existe el recurso |
 | `ROUTE_NOT_FOUND` | 404 | La ruta no existe |
 | `EMAIL_ALREADY_EXISTS` | 409 | Ya hay un usuario con ese email |
 | `DUPLICATE_KEY` | 409 | Se viola un índice único en la base |

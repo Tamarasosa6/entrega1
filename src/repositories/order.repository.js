@@ -21,6 +21,15 @@ export const OrderRepository = {
     return order.toObject({ versionKey: false });
   },
 
+  async updateStatus(id, status) {
+    if (!mongoose.isValidObjectId(id)) return null;
+    return OrderModel.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true, runValidators: true, projection: DEFAULT_PROJECTION }
+    ).lean();
+  },
+
   async insertMany(orders) {
     const inserted = await OrderModel.insertMany(orders);
     return inserted.length;

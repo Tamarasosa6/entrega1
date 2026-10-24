@@ -5,6 +5,7 @@ import {
   OrderNotFoundError,
   UserNotFoundError,
   InvalidPriorityError,
+  InvalidStatusError,
   NegativeValueError,
   RequestValidationError,
 } from '../errors/domain.errors.js';
@@ -102,6 +103,24 @@ export const OrderService = {
       priority,
       status: order.status,
     });
+    return order;
+  },
+
+  async updateStatus(id, data = {}) {
+    assertValidId(id);
+
+    const { status } = data;
+    if (status === undefined) {
+      throw new RequestValidationError([{ field: 'status', message: 'El estado es obligatorio.' }]);
+    }
+    if (!Object.values(ORDER_STATUS).includes(status)) {
+      throw new InvalidStatusError(status, Object.values(ORDER_STATUS));
+    }
+
+    const order = await OrderRepository.updateStatus(id, status);
+    if (!order) throw new OrderNotFoundError(id);
+
+    logger.info(`Estado del pedido actualizado: ${id}`, { orderId: String(id), status });
     return order;
   },
 };

@@ -75,6 +75,12 @@ export class OrderNotFoundError extends AppError {
   }
 }
 
+export class DeliveryNotFoundError extends AppError {
+  constructor(id) {
+    super(ERROR_CODES.DELIVERY_NOT_FOUND, { id: String(id) });
+  }
+}
+
 export class EmailAlreadyExistsError extends AppError {
   constructor(email) {
     super(ERROR_CODES.EMAIL_ALREADY_EXISTS, { email });

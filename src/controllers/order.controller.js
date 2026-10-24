@@ -21,6 +21,15 @@ export const OrderController = {
     }
   },
 
+  async updateStatus(req, res, next) {
+    try {
+      const order = await OrderService.updateStatus(req.params.id, req.body);
+      res.status(HTTP_STATUS.OK).json(order);
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async create(req, res, next) {
     try {
       const order = await OrderService.create(req.body);

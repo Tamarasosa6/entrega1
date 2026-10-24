@@ -15,6 +15,7 @@ export const ERROR_CODES = Object.freeze({
   USER_NOT_FOUND: 'USER_NOT_FOUND',
   PRODUCT_NOT_FOUND: 'PRODUCT_NOT_FOUND',
   ORDER_NOT_FOUND: 'ORDER_NOT_FOUND',
+  DELIVERY_NOT_FOUND: 'DELIVERY_NOT_FOUND',
   EMAIL_ALREADY_EXISTS: 'EMAIL_ALREADY_EXISTS',
   INVALID_ROLE: 'INVALID_ROLE',
   INVALID_STATUS: 'INVALID_STATUS',
@@ -84,6 +85,10 @@ export const ERROR_DICTIONARY = Object.freeze({
   [ERROR_CODES.ORDER_NOT_FOUND]: {
     status: HTTP_STATUS.NOT_FOUND,
     message: (d) => `No existe un pedido con id "${d.id}".`,
+  },
+  [ERROR_CODES.DELIVERY_NOT_FOUND]: {
+    status: HTTP_STATUS.NOT_FOUND,
+    message: (d) => `No existe una entrega con id "${d.id}".`,
   },
   [ERROR_CODES.EMAIL_ALREADY_EXISTS]: {
     status: HTTP_STATUS.CONFLICT,
