@@ -8,6 +8,7 @@ import {
   RequestValidationError,
 } from '../errors/domain.errors.js';
 import { assertValidId, isNonEmptyString } from '../utils/validators.js';
+import logger from '../logger/index.js';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 6;
@@ -56,7 +57,9 @@ export const UserService = {
     if (existing) throw new EmailAlreadyExistsError(email);
 
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-    return UserRepository.create({ name, email, password: hashedPassword, role });
+    const user = await UserRepository.create({ name, email, password: hashedPassword, role });
+    logger.info(`Usuario creado: ${user._id}`, { userId: String(user._id), role: user.role });
+    return user;
   },
 
   async update(id, data = {}) {

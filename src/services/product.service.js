@@ -6,6 +6,7 @@ import {
   NegativeValueError,
 } from '../errors/domain.errors.js';
 import { assertValidId, isNonEmptyString } from '../utils/validators.js';
+import logger from '../logger/index.js';
 
 // El estado del producto se deriva del stock (regla de negocio).
 function resolveStatus(stock) {
@@ -50,13 +51,19 @@ export const ProductService = {
   async create(data) {
     validateProductData(data);
     const stock = data.stock ?? 0;
-    return ProductRepository.create({
+    const product = await ProductRepository.create({
       name: data.name,
       description: data.description,
       price: data.price,
       stock,
       status: resolveStatus(stock),
     });
+    logger.info(`Producto creado: ${product._id}`, {
+      productId: String(product._id),
+      stock,
+      status: product.status,
+    });
+    return product;
   },
 
   async update(id, data) {

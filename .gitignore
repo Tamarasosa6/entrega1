@@ -6,3 +6,7 @@ npm-debug.log*
 .vs/
 .vscode/
 *.log
+
+# Logs generados por la aplicación (la carpeta se conserva gracias a .gitkeep)
+logs/*
+!logs/.gitkeep

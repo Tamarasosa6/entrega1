@@ -32,6 +32,23 @@ export const DELIVERY_STATUS = Object.freeze({
   DELIVERED: 'DELIVERED',
 });
 
+// Niveles de log, de más a menos severo (fatal = 0 ... debug = 5).
+export const LOG_LEVELS = Object.freeze({
+  FATAL: 'fatal',
+  ERROR: 'error',
+  WARNING: 'warning',
+  INFO: 'info',
+  HTTP: 'http',
+  DEBUG: 'debug',
+});
+
+// Nivel mínimo por defecto según NODE_ENV (se puede pisar con LOG_LEVEL).
+export const DEFAULT_LOG_LEVEL_BY_ENV = Object.freeze({
+  development: LOG_LEVELS.DEBUG,
+  production: LOG_LEVELS.INFO,
+  test: LOG_LEVELS.ERROR,
+});
+
 export const HTTP_STATUS = Object.freeze({
   OK: 200,
   CREATED: 201,

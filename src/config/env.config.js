@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { LOG_LEVELS, DEFAULT_LOG_LEVEL_BY_ENV } from '../constants/index.js';
 
 dotenv.config();
 
@@ -38,12 +39,24 @@ if (!/^mongodb(\+srv)?:\/\//.test(mongodbUri)) {
   );
 }
 
+// LOG_LEVEL es opcional: si no está, se elige según el entorno.
+const rawLogLevel = (process.env.LOG_LEVEL ?? '').trim().toLowerCase();
+const validLogLevels = Object.values(LOG_LEVELS);
+if (rawLogLevel !== '' && !validLogLevels.includes(rawLogLevel)) {
+  throw new Error(
+    `[Config] LOG_LEVEL inválido ("${rawLogLevel}"). Valores permitidos: ${validLogLevels.join(', ')}.`
+  );
+}
+const logLevel = rawLogLevel || DEFAULT_LOG_LEVEL_BY_ENV[nodeEnv];
+
 // Único lugar del proyecto donde se lee process.env
 const config = Object.freeze({
   port,
   mongodbUri,
   nodeEnv,
+  logLevel,
   isProduction: nodeEnv === 'production',
+  isTest: nodeEnv === 'test',
 });
 
 export default config;

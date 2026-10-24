@@ -1,15 +1,46 @@
-import config from './config/index.js'; // valida el entorno: si falta algo, lanza error y no arranca
-import { connectDB } from './config/db.js';
-import app from './app.js';
+import logger, { flushLogger } from './logger/index.js';
+
+// Registra una falla crítica, vacía los logs a disco y termina el proceso.
+let exiting = false;
+
+async function exitWithFatal(message, error) {
+  if (exiting) return;
+  exiting = true;
+  logger.fatal(message, { stack: error?.stack });
+  await flushLogger();
+  process.exit(1);
+}
+
+process.on('unhandledRejection', (reason) => {
+  exitWithFatal('Promesa rechazada sin manejar', reason instanceof Error ? reason : new Error(String(reason)));
+});
+process.on('uncaughtException', (error) => {
+  exitWithFatal('Excepción no capturada', error);
+});
 
 async function start() {
-  await connectDB();
+  // 1. Configuración de entorno (si falta una variable crítica, no arranca)
+  let config;
+  try {
+    config = (await import('./config/index.js')).default;
+  } catch (error) {
+    await exitWithFatal(`Configuración de entorno inválida: ${error.message}`, error);
+  }
+  logger.info(`Entorno: ${config.nodeEnv} (nivel de log: ${config.logLevel})`);
+
+  // 2. Base de datos
+  try {
+    const { connectDB } = await import('./config/db.js');
+    await connectDB();
+  } catch (error) {
+    await exitWithFatal(error.message, error.cause ?? error);
+  }
+
+  // 3. Servidor HTTP
+  const { default: app } = await import('./app.js');
   app.listen(config.port, () => {
-    console.log(`[Server] ShipNow API escuchando en http://localhost:${config.port} (${config.nodeEnv})`);
+    logger.info(`Servidor ShipNow escuchando en el puerto ${config.port}`);
   });
 }
 
-start().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
-});
+start();

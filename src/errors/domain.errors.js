@@ -126,6 +126,14 @@ export class SeedDisabledError extends AppError {
   }
 }
 
+// ----- Logger -----
+
+export class LoggerTestDisabledError extends AppError {
+  constructor() {
+    super(ERROR_CODES.LOGGER_TEST_DISABLED);
+  }
+}
+
 // Falla durante la carga en MongoDB: se conserva el error original como `cause`.
 export class MockSeedError extends AppError {
   constructor(entity, cause) {

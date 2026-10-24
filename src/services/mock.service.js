@@ -34,6 +34,7 @@ import {
   slug,
   daysFromNow,
 } from '../utils/mockData.js';
+import logger from '../logger/index.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import { OrderRepository } from '../repositories/order.repository.js';
 import { DeliveryRepository } from '../repositories/delivery.repository.js';
@@ -324,11 +325,15 @@ export const MockService = {
   // ----- GET: devuelven datos simulados, NO guardan nada -----
 
   getUsers(qtyParam, roleParam) {
-    return buildUsers(parseQty(qtyParam), { role: parseRole(roleParam) });
+    const users = buildUsers(parseQty(qtyParam), { role: parseRole(roleParam) });
+    logger.debug('Mocks generados (sin guardar)', { entity: MOCK_ENTITIES.USERS, count: users.length });
+    return users;
   },
 
   getDrivers(qtyParam) {
-    return buildUsers(parseQty(qtyParam), { role: USER_ROLES.DRIVER });
+    const drivers = buildUsers(parseQty(qtyParam), { role: USER_ROLES.DRIVER });
+    logger.debug('Mocks generados (sin guardar)', { entity: MOCK_ENTITIES.DRIVERS, count: drivers.length });
+    return drivers;
   },
 
   getOrders(qtyParam, statusParam, priorityParam) {
@@ -338,15 +343,26 @@ export const MockService = {
     const priority = parseOrderPriority(priorityParam);
     if (status) overrides.status = status;
     if (priority) overrides.priority = priority;
-    return buildDataset(qty, overrides).orders;
+    const { orders } = buildDataset(qty, overrides);
+    logger.debug('Mocks generados (sin guardar)', { entity: MOCK_ENTITIES.ORDERS, count: orders.length });
+    return orders;
   },
 
   getDeliveries(qtyParam) {
-    return buildDataset(parseQty(qtyParam)).deliveries;
+    const { deliveries } = buildDataset(parseQty(qtyParam));
+    logger.debug('Mocks generados (sin guardar)', { entity: MOCK_ENTITIES.DELIVERIES, count: deliveries.length });
+    return deliveries;
   },
 
   getDataset(qtyParam) {
     const { customers, drivers, orders, deliveries } = buildDataset(parseQty(qtyParam));
+    logger.debug('Mocks generados (sin guardar)', {
+      entity: MOCK_ENTITIES.ALL,
+      users: customers.length,
+      drivers: drivers.length,
+      orders: orders.length,
+      deliveries: deliveries.length,
+    });
     return { users: customers, drivers, orders, deliveries };
   },
 
@@ -357,8 +373,11 @@ export const MockService = {
     const qty = parseQty(qtyParam);
     const entity = parseEntity(entityParam);
 
+    logger.info('Carga de datos de prueba iniciada', { entity, qty });
     try {
-      return await runSeed(entity, qty);
+      const result = await runSeed(entity, qty);
+      logger.info('Datos de prueba insertados en MongoDB', { entity, ...result });
+      return result;
     } catch (error) {
       // Los errores del dominio pasan tal cual; cualquier otra falla
       // (MongoDB caído, validación del esquema, duplicados...) se traduce.

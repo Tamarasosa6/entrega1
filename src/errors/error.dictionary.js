@@ -25,6 +25,8 @@ export const ERROR_CODES = Object.freeze({
   MOCK_DEPENDENCY_MISSING: 'MOCK_DEPENDENCY_MISSING',
   SEED_DISABLED: 'SEED_DISABLED',
   MOCK_SEED_FAILED: 'MOCK_SEED_FAILED',
+  // Logger
+  LOGGER_TEST_DISABLED: 'LOGGER_TEST_DISABLED',
 });
 
 // Motivos posibles de INVALID_QUANTITY (viajan en error.details.reason)
@@ -116,6 +118,10 @@ export const ERROR_DICTIONARY = Object.freeze({
   [ERROR_CODES.SEED_DISABLED]: {
     status: HTTP_STATUS.FORBIDDEN,
     message: 'La carga de datos de prueba está deshabilitada en producción.',
+  },
+  [ERROR_CODES.LOGGER_TEST_DISABLED]: {
+    status: HTTP_STATUS.FORBIDDEN,
+    message: 'El endpoint de prueba del logger está deshabilitado en producción.',
   },
   [ERROR_CODES.MOCK_SEED_FAILED]: {
     status: HTTP_STATUS.INTERNAL_SERVER_ERROR,

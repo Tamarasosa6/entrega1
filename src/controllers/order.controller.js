@@ -20,4 +20,13 @@ export const OrderController = {
       next(error);
     }
   },
+
+  async create(req, res, next) {
+    try {
+      const order = await OrderService.create(req.body);
+      res.status(HTTP_STATUS.CREATED).json(order);
+    } catch (error) {
+      next(error);
+    }
+  },
 };

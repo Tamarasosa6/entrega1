@@ -16,6 +16,11 @@ export const OrderRepository = {
     return OrderModel.findById(id, DEFAULT_PROJECTION).lean();
   },
 
+  async create(data) {
+    const order = await OrderModel.create(data);
+    return order.toObject({ versionKey: false });
+  },
+
   async insertMany(orders) {
     const inserted = await OrderModel.insertMany(orders);
     return inserted.length;
