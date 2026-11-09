@@ -1,0 +1,7 @@
+export const DOCUMENT_TYPES = Object.freeze({
+  DNI: 'DNI',
+  DRIVER_LICENSE: 'DRIVER_LICENSE',
+  TAX_ID: 'TAX_ID',
+  PROOF_OF_ADDRESS: 'PROOF_OF_ADDRESS',
+  RECEIPT: 'RECEIPT'
+});

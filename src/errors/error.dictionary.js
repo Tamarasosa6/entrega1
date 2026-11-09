@@ -28,6 +28,12 @@ export const ERROR_CODES = Object.freeze({
   MOCK_SEED_FAILED: 'MOCK_SEED_FAILED',
   // Logger
   LOGGER_TEST_DISABLED: 'LOGGER_TEST_DISABLED',
+  // Uploads
+  FILE_MISSING: 'FILE_MISSING',
+  INVALID_FILE_TYPE: 'INVALID_FILE_TYPE',
+  FILE_SIZE_EXCEEDED: 'FILE_SIZE_EXCEEDED',
+  INVALID_DOC_TYPE: 'INVALID_DOC_TYPE',
+  UNEXPECTED_FIELD: 'UNEXPECTED_FIELD',
 });
 
 // Motivos posibles de INVALID_QUANTITY (viajan en error.details.reason)
@@ -127,6 +133,26 @@ export const ERROR_DICTIONARY = Object.freeze({
   [ERROR_CODES.LOGGER_TEST_DISABLED]: {
     status: HTTP_STATUS.FORBIDDEN,
     message: 'El endpoint de prueba del logger está deshabilitado en producción.',
+  },
+  [ERROR_CODES.FILE_MISSING]: {
+    status: HTTP_STATUS.BAD_REQUEST,
+    message: 'Es obligatorio adjuntar un archivo.',
+  },
+  [ERROR_CODES.INVALID_FILE_TYPE]: {
+    status: HTTP_STATUS.BAD_REQUEST,
+    message: (d) => `Tipo de archivo no permitido. Tipos aceptados: ${list(d.allowed)}.`,
+  },
+  [ERROR_CODES.FILE_SIZE_EXCEEDED]: {
+    status: HTTP_STATUS.BAD_REQUEST,
+    message: (d) => `El archivo supera el tamaño máximo permitido de ${d.maxSizeMB}MB.`,
+  },
+  [ERROR_CODES.INVALID_DOC_TYPE]: {
+    status: HTTP_STATUS.BAD_REQUEST,
+    message: (d) => `Tipo de documento inválido "${d.received}". Valores permitidos: ${list(d.allowed)}.`,
+  },
+  [ERROR_CODES.UNEXPECTED_FIELD]: {
+    status: HTTP_STATUS.BAD_REQUEST,
+    message: (d) => `Campo de formulario inesperado "${d.field}". Se esperaba "${d.expected}".`,
   },
   [ERROR_CODES.MOCK_SEED_FAILED]: {
     status: HTTP_STATUS.INTERNAL_SERVER_ERROR,

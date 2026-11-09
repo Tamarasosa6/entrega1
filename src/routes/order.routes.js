@@ -1,11 +1,20 @@
 import { Router } from 'express';
-import { OrderController } from '../controllers/order.controller.js';
+import { uploadSingle } from '../config/multer.config.js';
 
 const router = Router();
 
-router.get('/', OrderController.getAll);
-router.get('/:id', OrderController.getById);
-router.post('/', OrderController.create);
-router.patch('/:id/status', OrderController.updateStatus);
+router.post('/:id/receipt', uploadSingle('receipt'), (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Comprobante subido correctamente',
+    payload: {
+      entityId: req.params.id,
+      receipt: {
+        filename: req.file.filename,
+        originalName: req.file.originalname
+      }
+    }
+  });
+});
 
 export default router;

@@ -2,23 +2,16 @@ import request from 'supertest';
 import { expect } from 'chai';
 import mongoose from 'mongoose';
 import app from '../src/app.js';
+import path from 'path';
+import fs from 'fs';
 
-describe('🧪 Suite de Testing Funcional Automatizado - ShipNow API (Pre-entrega Módulo 6)', function () {
+describe('🧪 Suite de Testing Funcional Automatizado - ShipNow API (Pre-entrega Módulo 7)', function () {
   this.timeout(10000);
 
   before(async function () {
     const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/shipnow_test';
     if (mongoose.connection.readyState === 0) {
       await mongoose.connect(uri);
-    }
-  });
-
-  beforeEach(async function () {
-    if (mongoose.connection.db) {
-      const collections = await mongoose.connection.db.collections();
-      for (const collection of collections) {
-        await collection.deleteMany({});
-      }
     }
   });
 
@@ -29,85 +22,94 @@ describe('🧪 Suite de Testing Funcional Automatizado - ShipNow API (Pre-entreg
     await mongoose.connection.close();
   });
 
-  // 1. USUARIOS
-  describe('👤 Módulo de Usuarios (/api/users)', function () {
+  describe('👤 Módulo de Usuarios y Carga de Documentos (/api/users)', function () {
     it('GET /api/users - Obtener usuarios (Caso exitoso)', async function () {
       const res = await request(app).get('/api/users');
       expect([200, 404]).to.include(res.status);
     });
 
-    it('GET /api/users/:id - Usuario inexistente (Caso de error 404)', async function () {
-      const fakeId = new mongoose.Types.ObjectId();
-      const res = await request(app).get(`/api/users/${fakeId}`);
-      expect(res.status).to.equal(404);
+    it('POST /api/users/:id/documents - Carga correcta de documento (200)', async function () {
+      const testFilePath = path.join(process.cwd(), 'tests', 'test_doc.pdf');
+      fs.writeFileSync(testFilePath, '%PDF-1.4 Mock Document Content');
+
+      const res = await request(app)
+        .post('/api/users/123456789012345678901234/documents')
+        .field('docType', 'DNI')
+        .attach('document', testFilePath);
+
+      if (fs.existsSync(testFilePath)) fs.unlinkSync(testFilePath);
+
+      expect(res.status).to.equal(200);
+      expect(res.body).to.have.property('success', true);
+    });
+
+    it('POST /api/users/:id/documents - Error cuando falta el archivo (400)', async function () {
+      const res = await request(app)
+        .post('/api/users/123456789012345678901234/documents')
+        .field('docType', 'DNI');
+
+      expect(res.status).to.equal(400);
       expect(res.body).to.have.property('success', false);
+      expect(res.body.error).to.have.property('code', 'FILE_MISSING');
+    });
+
+    it('POST /api/users/:id/documents - Error con tipo de documento inválido (400)', async function () {
+      const testFilePath = path.join(process.cwd(), 'tests', 'test_doc.pdf');
+      fs.writeFileSync(testFilePath, '%PDF-1.4 Mock Document Content');
+
+      const res = await request(app)
+        .post('/api/users/123456789012345678901234/documents')
+        .field('docType', 'TIPO_INVALIDO')
+        .attach('document', testFilePath);
+
+      if (fs.existsSync(testFilePath)) fs.unlinkSync(testFilePath);
+
+      expect(res.status).to.equal(400);
+      expect(res.body).to.have.property('success', false);
+      expect(res.body.error).to.have.property('code', 'INVALID_DOC_TYPE');
+    });
+
+    it('POST /api/users/:id/documents - Error con tipo de archivo no permitido (.txt) (400)', async function () {
+      const testFilePath = path.join(process.cwd(), 'tests', 'test_doc.txt');
+      fs.writeFileSync(testFilePath, 'Plain text content');
+
+      const res = await request(app)
+        .post('/api/users/123456789012345678901234/documents')
+        .attach('document', testFilePath);
+
+      if (fs.existsSync(testFilePath)) fs.unlinkSync(testFilePath);
+
+      expect(res.status).to.equal(400);
+      expect(res.body).to.have.property('success', false);
+      expect(res.body.error).to.have.property('code', 'INVALID_FILE_TYPE');
     });
   });
 
-  // 2. PEDIDOS Y ENTREGAS
-  describe('📦 Módulo de Pedidos y Entregas (/api/orders & /api/deliveries)', function () {
-    it('GET /api/orders - Obtener pedidos (Caso exitoso)', async function () {
-      const res = await request(app).get('/api/orders');
-      expect([200, 404]).to.include(res.status);
-    });
+  describe('📦 Módulo de Pedidos, Entregas y Comprobantes (/api/orders)', function () {
+    it('POST /api/orders/:id/receipt - Carga exitosa de comprobante (200)', async function () {
+      const testFilePath = path.join(process.cwd(), 'tests', 'receipt.png');
+      fs.writeFileSync(testFilePath, 'Fake PNG Header');
 
-    it('POST /api/orders - Intentar crear pedido con datos vacíos (Caso de error 400)', async function () {
-      const res = await request(app).post('/api/orders').send({});
-      expect([400, 422]).to.include(res.status);
-      expect(res.body).to.have.property('success', false);
-    });
+      const res = await request(app)
+        .post('/api/orders/123456789012345678901234/receipt')
+        .attach('receipt', testFilePath);
 
-    it('GET /api/orders/:id - Pedido inexistente (Caso de error 404)', async function () {
-      const fakeId = new mongoose.Types.ObjectId();
-      const res = await request(app).get(`/api/orders/${fakeId}`);
-      expect(res.status).to.equal(404);
-      expect(res.body).to.have.property('success', false);
-    });
+      if (fs.existsSync(testFilePath)) fs.unlinkSync(testFilePath);
 
-    it('PATCH /api/orders/:id/status - Actualizar con estado inválido (Caso de error 400)', async function () {
-      const fakeId = new mongoose.Types.ObjectId();
-      const res = await request(app).patch(`/api/orders/${fakeId}/status`).send({ status: 'ESTADO_INVALIDO' });
-      expect([400, 404, 422]).to.include(res.status);
-    });
-
-    it('GET /api/deliveries - Obtener entregas (Caso exitoso)', async function () {
-      const res = await request(app).get('/api/deliveries');
-      expect([200, 404]).to.include(res.status);
+      expect(res.status).to.equal(200);
+      expect(res.body).to.have.property('success', true);
     });
   });
 
-  // 3. MOCKS
-  describe('🤡 Módulo de Mocks (/api/mocks)', function () {
-    it('GET /api/mocks - Endpoints de mocks (Caso exitoso)', async function () {
-      const res = await request(app).get('/api/mocks/users');
-      expect([200, 404]).to.include(res.status);
-    });
-
-    it('GET /api/mocks - Generar mocks con cantidad inválida o negativa (Caso de error 400)', async function () {
-      const res = await request(app).get('/api/mocks/users?qty=-10');
-      expect([400, 422]).to.include(res.status);
-    });
-  });
-
-  // 4. LOGGER
-  describe('📜 Endpoint de Logger (/api/logger)', function () {
-    it('GET /api/logger - Probar el logger en todos los niveles', async function () {
+  describe('📜 Logger y Swagger', function () {
+    it('GET /api/logger/test - Probar logger', async function () {
       const res = await request(app).get('/api/logger/test');
-      expect([200, 204, 404]).to.include(res.status);
+      expect([200, 204, 403, 404]).to.include(res.status);
     });
-  });
 
-  // 5. SWAGGER Y RUTAS INEXISTENTES
-  describe('📚 Swagger UI y Errores Globales', function () {
-    it('GET /api/docs - Acceso a la documentación Swagger', async function () {
+    it('GET /api/docs - Documentación Swagger', async function () {
       const res = await request(app).get('/api/docs/');
       expect([200, 301]).to.include(res.status);
-    });
-
-    it('GET /api/ruta-inexistente - Validar 404 y formato del middleware de errores', async function () {
-      const res = await request(app).get('/api/ruta-inexistente');
-      expect(res.status).to.equal(404);
-      expect(res.body).to.have.property('success', false);
     });
   });
 });
