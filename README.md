@@ -481,3 +481,41 @@ Notas:
 1. `GET /api/mocks/dataset?qty=5` para ver la forma de los datos sin tocar la base.
 2. `POST /api/mocks/seed?qty=20&entity=all` para cargar un conjunto completo.
 3. `GET /api/orders` para ver los pedidos cargados, y comprobar en MongoDB las colecciones `users`, `orders` y `deliveries`.
+
+
+---
+
+## 🧪 Testing Funcional (Pre-entrega Módulo 6)
+
+El proyecto cuenta con una suite completa de pruebas funcionales automatizadas integradas al repositorio, con el entorno de testing totalmente separado del de desarrollo.
+
+### 🛠️ Herramientas Utilizadas
+- **Mocha**: Framework para la organización y ejecución de la suite de pruebas.
+- **Chai**: Librería de aserciones (`expect`) para validar las estructuras de respuesta.
+- **Supertest**: Simulación de peticiones HTTP sobre la app Express sin necesidad de levantar manualmente un puerto HTTP.
+
+### ⚙️ Entorno de Testing y Variables de Entorno
+Los tests se ejecutan en un entorno aislado utilizando el archivo `.env.test`:
+- `PORT=8080`
+- `NODE_ENV=test`
+- `MONGODB_URI=mongodb://localhost:27017/shipnow_test` *(Base de datos exclusiva para pruebas)*
+- `LOG_LEVEL=error`
+
+### 🚀 Cómo Ejecutar los Tests
+Para instalar las dependencias de testing y correr la suite completa:
+```bash
+npm install
+npm test
+```
+
+### 📦 Módulos y Endpoints Cubiertos
+1. **Usuarios (`/api/users`)**: Listado de usuarios, consulta por ID y validación de error 404 ante usuarios inexistentes.
+2. **Pedidos (`/api/orders`)**: Obtención de listados, validación de datos incompletos en creación y control de estados inválidos.
+3. **Entregas (`/api/deliveries`)**: Consulta y actualización de entregas.
+4. **Mocks (`/api/mocks`)**: Generación de datos simulados y validación de error ante cantidades negativas o inválidas.
+5. **Logger (`/api/logger`)**: Endpoint de prueba de emisión de logs en todos los niveles.
+6. **Swagger (`/api/docs`)**: Verificación de accesibilidad a la interfaz interactiva de documentación.
+7. **Rutas Inexistentes**: Comprobación del middleware global de 404.
+
+### 🧹 Estrategia de Limpieza de Datos
+Se utilizan hooks de Mocha (`beforeEach` y `after`) para vaciar las colecciones de la base de datos de testing (`shipnow_test`) antes y después de cada grupo de ejecución. Esto garantiza que cada prueba sea completamente independiente, repetible y libre de efectos colaterales.
