@@ -151,36 +151,3 @@ export class MockSeedError extends AppError {
     return cause?.name ?? 'UNKNOWN';
   }
 }
-
-
-// ----- Uploads -----
-
-export class FileMissingError extends AppError {
-  constructor() {
-    super(ERROR_CODES.FILE_MISSING);
-  }
-}
-
-export class InvalidFileTypeError extends AppError {
-  constructor(allowed) {
-    super(ERROR_CODES.INVALID_FILE_TYPE, { allowed });
-  }
-}
-
-export class FileSizeExceededError extends AppError {
-  constructor(maxSizeMB) {
-    super(ERROR_CODES.FILE_SIZE_EXCEEDED, { maxSizeMB });
-  }
-}
-
-export class InvalidDocTypeError extends AppError {
-  constructor(received, allowed) {
-    super(ERROR_CODES.INVALID_DOC_TYPE, { received: String(received), allowed });
-  }
-}
-
-export class UnexpectedFieldError extends AppError {
-  constructor(field, expected) {
-    super(ERROR_CODES.UNEXPECTED_FIELD, { field, expected });
-  }
-}

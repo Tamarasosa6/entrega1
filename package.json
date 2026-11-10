@@ -1,27 +1,31 @@
 {
   "name": "shipnow-api",
   "version": "1.0.0",
-  "description": "ShipNow API - Pre-entrega Modulo 7",
+  "description": "API ShipNow con arquitectura por capas (Controller - Service - Repository)",
+  "main": "src/server.js",
   "type": "module",
-  "main": "src/app.js",
   "scripts": {
-    "start": "node src/app.js",
-    "dev": "nodemon src/app.js",
-    "test": "cross-env NODE_ENV=test mocha tests/**/*.test.js --exit --timeout 10000"
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "mocha",
+    "test:watch": "mocha --watch"
   },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "ISC",
   "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "mongoose": "^8.3.1",
+    "mongoose": "^8.5.0",
+    "swagger-ui-express": "^5.0.1",
     "winston": "^3.13.0",
-    "multer": "^1.4.5-lts.1",
-    "swagger-ui-express": "^5.0.0",
-    "dotenv": "^16.4.5"
+    "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
-    "chai": "^5.1.0",
-    "cross-env": "^7.0.3",
-    "mocha": "^10.4.0",
-    "nodemon": "^3.1.0",
-    "supertest": "^6.3.4"
+    "chai": "^4.5.0",
+    "mocha": "^10.7.3",
+    "supertest": "^7.0.0"
   }
 }

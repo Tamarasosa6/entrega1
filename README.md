@@ -102,6 +102,8 @@ src/
 ├── middlewares/     # error.middleware.js (responde y registra errores), requestLogger.middleware.js
 ├── routes/          # Solo conectan path → método del Controller
 └── utils/           # mockData (listas y helpers), validators, alias de constantes
+
+tests/               # Tests funcionales (Mocha + Chai + Supertest), ver sección Testing
 logs/                # Archivos de log generados (ignorados por Git; solo se versiona .gitkeep)
 ```
 
@@ -482,40 +484,56 @@ Notas:
 2. `POST /api/mocks/seed?qty=20&entity=all` para cargar un conjunto completo.
 3. `GET /api/orders` para ver los pedidos cargados, y comprobar en MongoDB las colecciones `users`, `orders` y `deliveries`.
 
+## Testing
 
----
+Tests funcionales de la API, agrupados por módulo en `tests/`.
 
-## 🧪 Testing Funcional (Pre-entrega Módulo 6)
+### Herramientas
 
-El proyecto cuenta con una suite completa de pruebas funcionales automatizadas integradas al repositorio, con el entorno de testing totalmente separado del de desarrollo.
+- **Mocha**: ejecuta los tests (configuración en `.mocharc.json`).
+- **Chai** (`expect`): aserciones.
+- **Supertest**: hace requests HTTP a `src/app.js` sin levantar el servidor (`app` está separada de `server.js`).
 
-### 🛠️ Herramientas Utilizadas
-- **Mocha**: Framework para la organización y ejecución de la suite de pruebas.
-- **Chai**: Librería de aserciones (`expect`) para validar las estructuras de respuesta.
-- **Supertest**: Simulación de peticiones HTTP sobre la app Express sin necesidad de levantar manualmente un puerto HTTP.
+### Cómo correrlos
 
-### ⚙️ Entorno de Testing y Variables de Entorno
-Los tests se ejecutan en un entorno aislado utilizando el archivo `.env.test`:
-- `PORT=8080`
-- `NODE_ENV=test`
-- `MONGODB_URI=mongodb://localhost:27017/shipnow_test` *(Base de datos exclusiva para pruebas)*
-- `LOG_LEVEL=error`
-
-### 🚀 Cómo Ejecutar los Tests
-Para instalar las dependencias de testing y correr la suite completa:
 ```bash
 npm install
 npm test
 ```
 
-### 📦 Módulos y Endpoints Cubiertos
-1. **Usuarios (`/api/users`)**: Listado de usuarios, consulta por ID y validación de error 404 ante usuarios inexistentes.
-2. **Pedidos (`/api/orders`)**: Obtención de listados, validación de datos incompletos en creación y control de estados inválidos.
-3. **Entregas (`/api/deliveries`)**: Consulta y actualización de entregas.
-4. **Mocks (`/api/mocks`)**: Generación de datos simulados y validación de error ante cantidades negativas o inválidas.
-5. **Logger (`/api/logger`)**: Endpoint de prueba de emisión de logs en todos los niveles.
-6. **Swagger (`/api/docs`)**: Verificación de accesibilidad a la interfaz interactiva de documentación.
-7. **Rutas Inexistentes**: Comprobación del middleware global de 404.
+Requiere **MongoDB corriendo en local**. Los tests usan una base propia, `shipnow_test`, que nunca se mezcla con la de desarrollo. No hace falta cargar datos a mano: cada test crea lo que necesita.
 
-### 🧹 Estrategia de Limpieza de Datos
-Se utilizan hooks de Mocha (`beforeEach` y `after`) para vaciar las colecciones de la base de datos de testing (`shipnow_test`) antes y después de cada grupo de ejecución. Esto garantiza que cada prueba sea completamente independiente, repetible y libre de efectos colaterales.
+### Variables de entorno
+
+Los tests definen `NODE_ENV=test` por su cuenta (funciona igual en Windows cmd) y tienen valores por defecto, así que no hace falta ningún archivo. Si querés cambiarlos, copiá `.env.test.example` a `.env.test` (ignorado por git):
+
+| Variable | Valor por defecto en test |
+|----------|---------------------------|
+| `NODE_ENV` | `test` (lo fija el setup) |
+| `PORT` | `3001` |
+| `MONGODB_URI` | `mongodb://127.0.0.1:27017/shipnow_test` |
+
+Por seguridad, si el nombre de la base no contiene `test`, la suite se niega a correr, para no borrar datos reales.
+En entorno `test` el logger queda en silencio y no escribe archivos en `logs/`.
+
+### Módulos cubiertos
+
+| Carpeta | Qué se prueba |
+|---------|---------------|
+| `tests/users` | Listado, alta y búsqueda por id de usuarios |
+| `tests/products` | Listado, alta, búsqueda por id y validaciones |
+| `tests/orders` | Listado, alta, búsqueda por id y cambio de estado |
+| `tests/deliveries` | Listado, búsqueda por id y cambio de estado |
+| `tests/mocks` | Datos simulados y carga (seed) en la base |
+| `tests/logger` | Logger y `GET /api/logger/test` |
+| `tests/docs` | Ruta de Swagger y coherencia entre lo documentado y la API real |
+| `tests/app` | `/health`, ruta inexistente (404), JSON inválido, errores 500/503/409 |
+| `tests/environment` | Validación de variables de entorno y bloqueos en producción |
+
+Cada endpoint tiene al menos un caso exitoso y uno de error. En los errores se valida el status HTTP **y** el formato del módulo de errores (`success: false` + `error.code`, `message`, `status`, `path`, `method`, `timestamp`). Los casos de error incluyen datos incompletos, recursos inexistentes, estado inválido, cantidades inválidas en mocks y ruta inexistente.
+
+### Datos y limpieza
+
+- Los datos salen de *factories* (`tests/helpers/factories.js`) y de los generadores de mocks; no se carga nada a mano.
+- Antes de cada test se vacían todas las colecciones de `shipnow_test`, y al terminar se vuelven a vaciar. Por eso la suite se puede correr varias veces seguidas sin limpiar nada.
+- La coherencia con Swagger se verifica recorriendo la especificación de `/api/docs/json`: cada error y ejemplo documentado se ejecuta contra la API real.

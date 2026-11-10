@@ -1,7 +1,8 @@
 import dotenv from 'dotenv';
 import { LOG_LEVELS, DEFAULT_LOG_LEVEL_BY_ENV } from '../constants/index.js';
 
-dotenv.config();
+// En testing se usa un archivo de variables propio (.env.test), separado del de desarrollo.
+dotenv.config({ path: process.env.NODE_ENV === 'test' ? '.env.test' : '.env' });
 
 const REQUIRED_VARS = ['PORT', 'MONGODB_URI', 'NODE_ENV'];
 const VALID_ENVIRONMENTS = ['development', 'production', 'test'];
