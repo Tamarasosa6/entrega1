@@ -73,8 +73,15 @@ describe('Swagger - documentación de la API', () => {
       expect(spec.paths['/api/logger/test']).to.have.property('get');
     });
 
+    it('documenta los endpoints de carga de archivos como multipart/form-data', () => {
+      ['/api/users/{id}/documents', '/api/orders/{id}/receipts', '/api/deliveries/{id}/receipts'].forEach((path) => {
+        expect(spec.paths[path], path).to.have.property('post');
+        expect(spec.paths[path].post.requestBody.content).to.have.property('multipart/form-data');
+      });
+    });
+
     it('define los schemas reutilizables', () => {
-      ['User', 'Order', 'OrderItem', 'Delivery', 'ErrorResponse', 'SuccessMessage'].forEach((name) => {
+      ['User', 'Order', 'OrderItem', 'Delivery', 'FileMetadata', 'ErrorResponse', 'SuccessMessage'].forEach((name) => {
         expect(spec.components.schemas).to.have.property(name);
       });
     });

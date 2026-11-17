@@ -1,3 +1,4 @@
+import path from 'node:path';
 import dotenv from 'dotenv';
 import { LOG_LEVELS, DEFAULT_LOG_LEVEL_BY_ENV } from '../constants/index.js';
 
@@ -50,12 +51,16 @@ if (rawLogLevel !== '' && !validLogLevels.includes(rawLogLevel)) {
 }
 const logLevel = rawLogLevel || DEFAULT_LOG_LEVEL_BY_ENV[nodeEnv];
 
+// UPLOADS_DIR es opcional: carpeta donde se guardan los archivos subidos (por defecto ./uploads).
+const uploadsDir = path.resolve((process.env.UPLOADS_DIR ?? '').trim() || 'uploads');
+
 // Único lugar del proyecto donde se lee process.env
 const config = Object.freeze({
   port,
   mongodbUri,
   nodeEnv,
   logLevel,
+  uploadsDir,
   isProduction: nodeEnv === 'production',
   isTest: nodeEnv === 'test',
 });

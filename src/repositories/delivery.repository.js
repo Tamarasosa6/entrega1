@@ -25,6 +25,16 @@ export const DeliveryRepository = {
     }).lean();
   },
 
+  // Agrega los metadatos de un comprobante a la entrega y devuelve la entrega actualizada.
+  async addReceipt(id, metadata) {
+    if (!mongoose.isValidObjectId(id)) return null;
+    return DeliveryModel.findByIdAndUpdate(
+      id,
+      { $push: { receipts: metadata } },
+      { new: true, runValidators: true, projection: DEFAULT_PROJECTION }
+    ).lean();
+  },
+
   // IDs de los pedidos que ya tienen una entrega asociada
   async getOrderIdsWithDelivery() {
     const ids = await DeliveryModel.distinct('order');

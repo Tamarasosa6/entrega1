@@ -25,6 +25,7 @@ const STATUS_DESCRIPTIONS = Object.freeze({
   403: 'Operación no permitida',
   404: 'Recurso no encontrado',
   409: 'Conflicto con el estado actual de los datos',
+  413: 'El archivo supera el tamaño máximo',
   500: 'Error interno del servidor',
   503: 'Base de datos no disponible',
 });

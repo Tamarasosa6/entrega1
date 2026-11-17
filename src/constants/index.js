@@ -56,6 +56,7 @@ export const HTTP_STATUS = Object.freeze({
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   CONFLICT: 409,
+  PAYLOAD_TOO_LARGE: 413,
   INTERNAL_SERVER_ERROR: 500,
   SERVICE_UNAVAILABLE: 503,
 });
@@ -76,4 +77,42 @@ export const MOCK_CONFIG = Object.freeze({
   MAX_QTY: 100,
   PASSWORD: 'Test1234', // contraseña de todos los usuarios de prueba
   EMAIL_DOMAIN: 'test.com',
+});
+
+// ----- Carga de archivos (Multer) -----
+
+// Tipos de documento que se pueden asociar a un usuario.
+export const DOCUMENT_TYPES = Object.freeze({
+  DNI: 'DNI',
+  DRIVER_LICENSE: 'DRIVER_LICENSE',
+  TAX_ID: 'TAX_ID',
+  PROOF_OF_ADDRESS: 'PROOF_OF_ADDRESS',
+  OTHER: 'OTHER',
+});
+
+// Tipo que se registra en los metadatos de los comprobantes de pedidos y entregas.
+export const RECEIPT_DOCUMENT_TYPE = 'RECEIPT';
+
+// Nombre del campo de archivo que espera cada endpoint (multipart/form-data).
+export const UPLOAD_FIELDS = Object.freeze({
+  USER_DOCUMENT: 'document',
+  RECEIPT: 'receipt',
+});
+
+// Subcarpetas dentro de la carpeta de uploads.
+export const UPLOAD_FOLDERS = Object.freeze({
+  USER_DOCUMENTS: 'documents',
+  DRIVER_LICENSES: 'licenses',
+  RECEIPTS: 'receipts',
+});
+
+export const UPLOAD_CONFIG = Object.freeze({
+  MAX_FILE_SIZE: 5 * 1024 * 1024, // 5 MB
+  // Tipo MIME permitido → extensiones aceptadas para ese tipo
+  ALLOWED_TYPES: Object.freeze({
+    'application/pdf': Object.freeze(['.pdf']),
+    'image/jpeg': Object.freeze(['.jpg', '.jpeg']),
+    'image/png': Object.freeze(['.png']),
+    'image/webp': Object.freeze(['.webp']),
+  }),
 });

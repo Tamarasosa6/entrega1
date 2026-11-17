@@ -4,6 +4,10 @@ import {
   ORDER_STATUS,
   ORDER_PRIORITY,
   DELIVERY_STATUS,
+  DOCUMENT_TYPES,
+  RECEIPT_DOCUMENT_TYPE,
+  UPLOAD_CONFIG,
+  UPLOAD_FIELDS,
   MOCK_ENTITIES,
   MOCK_CONFIG,
   LOG_LEVELS,
@@ -25,6 +29,12 @@ const timestamps = {
   updatedAt: { type: 'string', format: 'date-time' },
 };
 
+const receiptsProperty = {
+  type: 'array',
+  items: schemaRef('FileMetadata'),
+  description: 'Metadatos de los comprobantes subidos (los archivos viven en el servidor, no en la base).',
+};
+
 // Schemas reutilizables. Los enums salen de las constantes del proyecto.
 export const schemas = {
   // ---------- Entidades ----------
@@ -36,6 +46,11 @@ export const schemas = {
       name: { type: 'string', example: 'Ana Pérez' },
       email: { type: 'string', format: 'email', example: 'ana@mail.com' },
       role: { type: 'string', enum: values(USER_ROLES), description: 'USER = cliente, DRIVER = repartidor.' },
+      documents: {
+        type: 'array',
+        items: schemaRef('FileMetadata'),
+        description: 'Metadatos de los documentos subidos con POST /api/users/{id}/documents.',
+      },
       ...timestamps,
     },
   },
@@ -74,6 +89,7 @@ export const schemas = {
       status: { type: 'string', enum: values(ORDER_STATUS) },
       priority: { type: 'string', enum: values(ORDER_PRIORITY) },
       shippingAddress: { type: 'string', example: 'Mitre 123, Córdoba' },
+      receipts: receiptsProperty,
       ...timestamps,
     },
   },
@@ -92,7 +108,74 @@ export const schemas = {
       address: { type: 'string', example: 'Mitre 123, Córdoba' },
       scheduledDate: { type: 'string', format: 'date-time' },
       deliveredAt: { type: 'string', format: 'date-time', nullable: true, description: 'Solo tiene valor cuando la entrega está DELIVERED.' },
+      receipts: receiptsProperty,
       ...timestamps,
+    },
+  },
+
+  FileMetadata: {
+    type: 'object',
+    description: 'Metadatos de un archivo subido. En la base solo se guardan estos datos: el archivo queda en la carpeta de uploads del servidor.',
+    properties: {
+      originalName: { type: 'string', example: 'dni-frente.pdf', description: 'Nombre con el que lo envió el cliente.' },
+      storedName: { type: 'string', example: 'document-1761328800000-3f1c0a9b-e2d4-4f7a-8c10-b6e2a1c9d4e5.pdf', description: 'Nombre generado con el que se guardó.' },
+      path: { type: 'string', example: 'documents/document-1761328800000-3f1c0a9b-e2d4-4f7a-8c10-b6e2a1c9d4e5.pdf', description: 'Ruta relativa a la carpeta de uploads.' },
+      mimeType: { type: 'string', enum: Object.keys(UPLOAD_CONFIG.ALLOWED_TYPES), example: 'application/pdf' },
+      size: { type: 'integer', minimum: 0, example: 52341, description: 'Tamaño en bytes.' },
+      documentType: { type: 'string', enum: [...values(DOCUMENT_TYPES), RECEIPT_DOCUMENT_TYPE], example: 'DNI' },
+      uploadedAt: { type: 'string', format: 'date-time', description: 'Fecha de carga.' },
+    },
+  },
+  UserDocumentUploadForm: {
+    type: 'object',
+    required: [UPLOAD_FIELDS.USER_DOCUMENT],
+    properties: {
+      [UPLOAD_FIELDS.USER_DOCUMENT]: {
+        type: 'string',
+        format: 'binary',
+        description: `Archivo (campo \`${UPLOAD_FIELDS.USER_DOCUMENT}\`). Tipos permitidos: ${Object.keys(UPLOAD_CONFIG.ALLOWED_TYPES).join(', ')}. Máximo ${UPLOAD_CONFIG.MAX_FILE_SIZE / (1024 * 1024)} MB.`,
+      },
+      documentType: {
+        type: 'string',
+        enum: values(DOCUMENT_TYPES),
+        default: DOCUMENT_TYPES.OTHER,
+        description: 'Tipo de documento (opcional). Si se envía y no es uno de los permitidos responde 400 INVALID_DOCUMENT_TYPE. DRIVER_LICENSE se guarda en la carpeta licenses.',
+      },
+    },
+  },
+  ReceiptUploadForm: {
+    type: 'object',
+    required: [UPLOAD_FIELDS.RECEIPT],
+    properties: {
+      [UPLOAD_FIELDS.RECEIPT]: {
+        type: 'string',
+        format: 'binary',
+        description: `Archivo del comprobante (campo \`${UPLOAD_FIELDS.RECEIPT}\`). Tipos permitidos: ${Object.keys(UPLOAD_CONFIG.ALLOWED_TYPES).join(', ')}. Máximo ${UPLOAD_CONFIG.MAX_FILE_SIZE / (1024 * 1024)} MB.`,
+      },
+    },
+  },
+  UserDocumentUploadResult: {
+    type: 'object',
+    properties: {
+      message: { type: 'string', example: 'Documento cargado correctamente.' },
+      document: schemaRef('FileMetadata'),
+      user: schemaRef('User'),
+    },
+  },
+  OrderReceiptUploadResult: {
+    type: 'object',
+    properties: {
+      message: { type: 'string', example: 'Comprobante cargado correctamente.' },
+      receipt: schemaRef('FileMetadata'),
+      order: schemaRef('Order'),
+    },
+  },
+  DeliveryReceiptUploadResult: {
+    type: 'object',
+    properties: {
+      message: { type: 'string', example: 'Comprobante cargado correctamente.' },
+      receipt: schemaRef('FileMetadata'),
+      delivery: schemaRef('Delivery'),
     },
   },
 

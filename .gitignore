@@ -11,3 +11,7 @@ npm-debug.log*
 # Logs generados por la aplicación (la carpeta se conserva gracias a .gitkeep)
 logs/*
 !logs/.gitkeep
+
+# Archivos subidos por los usuarios (documentos y comprobantes): nunca van al repositorio
+uploads/
+uploads-*/

@@ -30,6 +30,7 @@ API REST de ShipNow con **arquitectura por capas** (Controller → Service → R
    MONGODB_URI=mongodb://127.0.0.1:27017/shipnow
    NODE_ENV=development
    # LOG_LEVEL=debug   (opcional, ver sección Logging)
+   # UPLOADS_DIR=uploads   (opcional, carpeta de archivos subidos)
    ```
 
 4. Iniciar el servidor:
@@ -62,6 +63,9 @@ Si falta alguna variable (por ejemplo `MONGODB_URI`), la app lanza un error desc
 | GET | `/api/deliveries` | Lista entregas |
 | GET | `/api/deliveries/:id` | Detalle de una entrega |
 | PATCH | `/api/deliveries/:id/status` | Cambia el estado de una entrega (y asigna repartidor si corresponde) |
+| POST | `/api/users/:id/documents` | **Sube un documento** de un usuario (`multipart/form-data`, ver Carga de archivos) |
+| POST | `/api/orders/:id/receipts` | **Sube un comprobante** de un pedido (`multipart/form-data`) |
+| POST | `/api/deliveries/:id/receipts` | **Sube un comprobante** de una entrega (`multipart/form-data`) |
 | GET | `/api/docs` | **Documentación interactiva (Swagger UI)** |
 | GET | `/api/docs/json` | Especificación OpenAPI en JSON |
 | GET | `/api/logger/test` | Emite un log de cada nivel para verificar el logger (deshabilitado en producción) |
@@ -90,7 +94,7 @@ Ejemplos de body:
 
 ```
 src/
-├── config/          # env.config.js (validación de .env), db.js (conexión)
+├── config/          # env.config.js (validación de .env), db.js (conexión), upload.config.js (Multer)
 ├── constants/       # roles, estados, prioridades, límites de mocks (Object.freeze)
 ├── controllers/     # Capa HTTP: req/res; los errores se derivan con next(error)
 ├── services/        # Lógica de negocio: validan y lanzan errores del dominio
@@ -101,10 +105,12 @@ src/
 ├── logger/          # Logger centralizado (Winston): niveles, consola, archivos y rotación
 ├── middlewares/     # error.middleware.js (responde y registra errores), requestLogger.middleware.js
 ├── routes/          # Solo conectan path → método del Controller
+├── storage/         # file.storage.js: único lugar que escribe/borra archivos en disco
 └── utils/           # mockData (listas y helpers), validators, alias de constantes
 
 tests/               # Tests funcionales (Mocha + Chai + Supertest), ver sección Testing
 logs/                # Archivos de log generados (ignorados por Git; solo se versiona .gitkeep)
+uploads/             # Archivos subidos (se crea sola; ignorada por Git)
 ```
 
 Flujo de dependencias: `Route → Controller → Service → Repository → Model`.
@@ -484,6 +490,97 @@ Notas:
 2. `POST /api/mocks/seed?qty=20&entity=all` para cargar un conjunto completo.
 3. `GET /api/orders` para ver los pedidos cargados, y comprobar en MongoDB las colecciones `users`, `orders` y `deliveries`.
 
+## Carga de archivos (Multer)
+
+La API recibe documentos y comprobantes como `multipart/form-data`, los guarda en carpetas del servidor y registra **solo los metadatos** en MongoDB (nunca el archivo).
+
+### Endpoints
+
+| Método | Ruta | Campo del archivo | Campos adicionales | Entidad |
+|--------|------|-------------------|--------------------|---------|
+| POST | `/api/users/:id/documents` | `document` | `documentType` (opcional) | Usuario |
+| POST | `/api/orders/:id/receipts` | `receipt` | — | Pedido |
+| POST | `/api/deliveries/:id/receipts` | `receipt` | — | Entrega |
+
+`documentType`: `DNI`, `DRIVER_LICENSE`, `TAX_ID`, `PROOF_OF_ADDRESS` u `OTHER` (por defecto `OTHER`). Si se envía otro valor responde 400 `INVALID_DOCUMENT_TYPE`.
+
+Ejemplo (en cmd de Windows, con `curl`):
+
+```bash
+curl -X POST "http://localhost:3000/api/users/<id-del-usuario>/documents" -F "document=@dni.pdf" -F "documentType=DNI"
+curl -X POST "http://localhost:3000/api/orders/<id-del-pedido>/receipts" -F "receipt=@comprobante.png"
+```
+
+Respuesta exitosa (**201**): el mensaje, los metadatos del archivo y la entidad ya actualizada.
+
+```json
+{
+  "message": "Documento cargado correctamente.",
+  "document": {
+    "originalName": "dni.pdf",
+    "storedName": "document-1761328800000-3f1c0a9b-e2d4-4f7a-8c10-b6e2a1c9d4e5.pdf",
+    "path": "documents/document-1761328800000-3f1c0a9b-e2d4-4f7a-8c10-b6e2a1c9d4e5.pdf",
+    "mimeType": "application/pdf",
+    "size": 52341,
+    "documentType": "DNI",
+    "uploadedAt": "2026-10-24T18:20:00.000Z"
+  },
+  "user": { "_id": "...", "name": "Ana", "email": "ana@mail.com", "role": "USER", "documents": ["..."] }
+}
+```
+
+En los pedidos y entregas la respuesta trae `receipt` y `order` / `delivery`. Los metadatos quedan en `user.documents` y en `receipts` de pedidos y entregas.
+
+### Configuración centralizada
+
+Todo está en `src/config/upload.config.js` (los routers solo usan `uploadSingle(campo)`):
+
+- **Tipos permitidos:** `application/pdf`, `image/jpeg`, `image/png` e `image/webp`. Se valida el tipo MIME **y** que la extensión corresponda (`.pdf`, `.jpg`/`.jpeg`, `.png`, `.webp`).
+- **Tamaño máximo:** 5 MB.
+- **Nombre guardado:** `<campo>-<fecha>-<uuid><extensión>`. Nunca se usa el nombre original en disco (se conserva solo en los metadatos).
+- **Dónde se guarda:** el archivo se recibe en memoria y se escribe en disco recién después de validar todo (archivo, tipo de documento y que la entidad exista), así no quedan archivos huérfanos. Si falla el registro en la base, el archivo se borra.
+
+### Carpetas de uploads
+
+```
+uploads/
+├── documents/   # documentos de usuario (DNI, CUIT, domicilio, otros)
+├── licenses/    # licencias de conducir (documentType=DRIVER_LICENSE)
+└── receipts/    # comprobantes de pedidos y entregas
+```
+
+La carpeta `uploads/` se crea sola y **está en `.gitignore`: los archivos subidos no van al repositorio**. Se puede cambiar con `UPLOADS_DIR` (opcional).
+
+### Metadatos guardados en la base
+
+`originalName`, `storedName`, `path` (relativa a la carpeta de uploads), `mimeType`, `size` (bytes), `documentType` y `uploadedAt`.
+
+### Errores de archivos
+
+Todos usan el formato general del proyecto (`success: false` + `error` con `code`, `message`, `status`, `details`, `path`, `method`, `timestamp`).
+
+| Código | Status | Cuándo |
+|--------|--------|--------|
+| `FILE_REQUIRED` | 400 | No se adjuntó ningún archivo |
+| `INVALID_FILE_TYPE` | 400 | Tipo de archivo o extensión no permitidos |
+| `FILE_TOO_LARGE` | 413 | El archivo supera los 5 MB |
+| `UNEXPECTED_FILE_FIELD` | 400 | El archivo se envió en un campo distinto del esperado |
+| `INVALID_DOCUMENT_TYPE` | 400 | `documentType` no es uno de los permitidos |
+| `INVALID_UPLOAD` | 400 | El formulario `multipart/form-data` está mal formado |
+| `USER_NOT_FOUND` / `ORDER_NOT_FOUND` / `DELIVERY_NOT_FOUND` | 404 | La entidad no existe |
+| `INVALID_ID` | 400 | El id no tiene formato válido |
+| `FILE_SAVE_FAILED` | 500 | No se pudo guardar el archivo en el servidor |
+
+### Logging
+
+- `info`: documento cargado, comprobante asociado a un pedido o a una entrega.
+- `warning`: intento de subir un tipo de archivo no permitido y los errores de carga de la API (archivo requerido, demasiado grande, etc.).
+- `error`: falla al guardar el archivo.
+
+### Documentación
+
+Los tres endpoints están en Swagger (`/api/docs`) como `multipart/form-data`, con el nombre del campo de archivo, los campos adicionales, los tipos de documento permitidos, la respuesta exitosa y los errores posibles.
+
 ## Testing
 
 Tests funcionales de la API, agrupados por módulo en `tests/`.
@@ -512,6 +609,7 @@ Los tests definen `NODE_ENV=test` por su cuenta (funciona igual en Windows cmd) 
 | `NODE_ENV` | `test` (lo fija el setup) |
 | `PORT` | `3001` |
 | `MONGODB_URI` | `mongodb://127.0.0.1:27017/shipnow_test` |
+| `UPLOADS_DIR` | Carpeta temporal del sistema (`shipnow-uploads-test-<pid>`); su nombre debe contener `test` |
 
 Por seguridad, si el nombre de la base no contiene `test`, la suite se niega a correr, para no borrar datos reales.
 En entorno `test` el logger queda en silencio y no escribe archivos en `logs/`.
@@ -523,6 +621,7 @@ En entorno `test` el logger queda en silencio y no escribe archivos en `logs/`.
 | `tests/users` | Listado, alta y búsqueda por id de usuarios |
 | `tests/products` | Listado, alta, búsqueda por id y validaciones |
 | `tests/orders` | Listado, alta, búsqueda por id y cambio de estado |
+| `tests/uploads` | Carga de documentos de usuario y de comprobantes de pedidos y entregas: éxito, tipo/tamaño/campo inválidos, entidad inexistente y fallas de disco |
 | `tests/deliveries` | Listado, búsqueda por id y cambio de estado |
 | `tests/mocks` | Datos simulados y carga (seed) en la base |
 | `tests/logger` | Logger y `GET /api/logger/test` |
@@ -535,5 +634,6 @@ Cada endpoint tiene al menos un caso exitoso y uno de error. En los errores se v
 ### Datos y limpieza
 
 - Los datos salen de *factories* (`tests/helpers/factories.js`) y de los generadores de mocks; no se carga nada a mano.
+- Los archivos de prueba se generan en memoria (no hay archivos sueltos en el repositorio) y se guardan en una carpeta de uploads temporal que se vacía antes y después de cada test y se elimina al terminar: `./uploads` nunca se toca.
 - Antes de cada test se vacían todas las colecciones de `shipnow_test`, y al terminar se vuelven a vaciar. Por eso la suite se puede correr varias veces seguidas sin limpiar nada.
 - La coherencia con Swagger se verifica recorriendo la especificación de `/api/docs/json`: cada error y ejemplo documentado se ejecuta contra la API real.

@@ -6,8 +6,10 @@ import { expect } from 'chai';
 import app from '../../src/app.js';
 import { openApiSpec as spec } from '../../src/docs/openapi.js';
 import { ERROR_DICTIONARY } from '../../src/errors/error.dictionary.js';
-import { ORDER_STATUS, DELIVERY_STATUS, MOCK_CONFIG } from '../../src/constants/index.js';
+import { ORDER_STATUS, DELIVERY_STATUS, MOCK_CONFIG, DOCUMENT_TYPES, UPLOAD_CONFIG } from '../../src/constants/index.js';
 import { clearDatabase } from '../helpers/db.js';
+import { createUser, createOrder, createDelivery } from '../helpers/factories.js';
+import { pdfFile, attach, resetUploads } from '../helpers/uploads.js';
 import { expectErrorResponse } from '../helpers/assertions.js';
 import { NON_EXISTENT_ID, MALFORMED_ID } from '../helpers/constants.js';
 
@@ -27,6 +29,19 @@ const responseSchema = (operationId, status) =>
 const send = (method, url, body) => {
   const req = request(app)[method](url);
   return body === undefined ? req : req.send(body);
+};
+
+// Los endpoints de carga se documentan como multipart/form-data: el schema indica el campo del archivo.
+const multipartSchema = (operation) => {
+  const content = operation.requestBody?.content?.['multipart/form-data'];
+  return content ? resolveRef(content.schema) : null;
+};
+const fileFieldOf = (schema) => Object.keys(schema.properties).find((key) => schema.properties[key].format === 'binary');
+
+// Envía una carga válida (un PDF en el campo que indica la documentación)
+const sendUpload = (operation, method, url) => {
+  const schema = multipartSchema(operation);
+  return attach(request(app)[method](url), fileFieldOf(schema), pdfFile());
 };
 
 // Cuerpos mínimos válidos para llegar hasta la validación del id
@@ -60,7 +75,11 @@ function expectMatchesErrorSchema(body) {
 const sortedKeys = (object) => Object.keys(object).sort();
 
 describe('Swagger - coherencia entre la documentación y la API', () => {
-  beforeEach(clearDatabase);
+  beforeEach(async () => {
+    await clearDatabase();
+    resetUploads();
+  });
+  afterEach(resetUploads);
 
   describe('los errores documentados coinciden con el diccionario de errores', () => {
     operations.forEach(({ label, operation }) => {
@@ -109,7 +128,7 @@ describe('Swagger - coherencia entre la documentación y la API', () => {
         if (documented400.INVALID_ID) {
           it(`${label} → 400 INVALID_ID con un id mal formado`, async () => {
             const url = path.replace('{id}', MALFORMED_ID);
-            const res = await send(method, url, body);
+            const res = multipartSchema(operation) ? await sendUpload(operation, method, url) : await send(method, url, body);
 
             expectErrorResponse(res, { status: 400, code: 'INVALID_ID', method: method.toUpperCase(), path: url });
             expectMatchesErrorSchema(res.body);
@@ -119,7 +138,7 @@ describe('Swagger - coherencia entre la documentación y la API', () => {
         if (documented404[notFoundCode]) {
           it(`${label} → 404 ${notFoundCode} con un id inexistente`, async () => {
             const url = path.replace('{id}', NON_EXISTENT_ID);
-            const res = await send(method, url, body);
+            const res = multipartSchema(operation) ? await sendUpload(operation, method, url) : await send(method, url, body);
 
             expectErrorResponse(res, { status: 404, code: notFoundCode, method: method.toUpperCase(), path: url });
             expectMatchesErrorSchema(res.body);
@@ -144,6 +163,63 @@ describe('Swagger - coherencia entre la documentación y la API', () => {
         expect(res.body.error.code).to.equal(code);
         expectMatchesErrorSchema(res.body);
       });
+    });
+  });
+
+  describe('los endpoints de carga de archivos están documentados como multipart/form-data', () => {
+    const UPLOAD_FLOWS = {
+      uploadUserDocument: { create: createUser, resultKeys: ['document', 'user'] },
+      uploadOrderReceipt: { create: createOrder, resultKeys: ['receipt', 'order'] },
+      uploadDeliveryReceipt: { create: createDelivery, resultKeys: ['receipt', 'delivery'] },
+    };
+
+    Object.entries(UPLOAD_FLOWS).forEach(([operationId, { create, resultKeys }]) => {
+      const { method, path, operation, label } = byId(operationId);
+      const schema = multipartSchema(operation);
+
+      it(`${label}: solo acepta multipart/form-data y declara el campo de archivo como obligatorio`, () => {
+        expect(Object.keys(operation.requestBody.content)).to.eql(['multipart/form-data']);
+        expect(operation.requestBody.required).to.equal(true);
+        const field = fileFieldOf(schema);
+        expect(field, 'campo binario').to.be.a('string');
+        expect(schema.required).to.include(field);
+        expect(operation.description).to.include(`\`${field}\``);
+        expect(operation.description).to.include('5 MB');
+      });
+
+      it(`${label}: documenta los errores de archivos con el formato general`, () => {
+        const codesOf = (status) => Object.keys(operation.responses[status].content['application/json'].examples);
+
+        ['INVALID_ID', 'FILE_REQUIRED', 'INVALID_FILE_TYPE', 'UNEXPECTED_FILE_FIELD', 'INVALID_UPLOAD'].forEach((code) =>
+          expect(codesOf(400)).to.include(code)
+        );
+        expect(codesOf(413)).to.eql(['FILE_TOO_LARGE']);
+        expect(codesOf(500)).to.include('FILE_SAVE_FAILED');
+        expect(codesOf(404)).to.have.lengthOf(1);
+      });
+
+      it(`${label}: la carga documentada funciona y la respuesta tiene la forma del schema`, async () => {
+        const entity = await create();
+        const field = fileFieldOf(schema);
+
+        const res = await attach(request(app)[method](path.replace('{id}', entity._id)), field, pdfFile());
+
+        expect(res.status).to.equal(201);
+        const resultSchema = responseSchema(operationId, 201);
+        expect(sortedKeys(res.body)).to.eql(sortedKeys(resultSchema.properties));
+        expect(sortedKeys(res.body)).to.eql(['message', ...resultKeys].sort());
+        const metadata = res.body[resultKeys[0]];
+        expect(sortedKeys(metadata)).to.eql(sortedKeys(spec.components.schemas.FileMetadata.properties));
+        expect(spec.components.schemas.FileMetadata.properties.mimeType.enum).to.include(metadata.mimeType);
+      });
+    });
+
+    it('los tipos de documento y de archivo documentados coinciden con los que valida la API', () => {
+      const form = spec.components.schemas.UserDocumentUploadForm;
+
+      expect(form.properties.documentType.enum).to.eql(Object.values(DOCUMENT_TYPES));
+      expect(form.properties.documentType.default).to.equal(DOCUMENT_TYPES.OTHER);
+      expect(spec.components.schemas.FileMetadata.properties.mimeType.enum).to.eql(Object.keys(UPLOAD_CONFIG.ALLOWED_TYPES));
     });
   });
 

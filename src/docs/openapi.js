@@ -3,6 +3,7 @@ import config from '../config/index.js';
 import { schemas, parameters } from './schemas.js';
 import { productsPaths, usersPaths } from './paths/catalog.paths.js';
 import { ordersPaths, deliveriesPaths } from './paths/orders.paths.js';
+import { uploadsPaths } from './paths/uploads.paths.js';
 import { mocksPaths, loggerPaths, healthPaths } from './paths/mocks.paths.js';
 
 const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
@@ -25,7 +26,9 @@ export const openApiSpec = {
       '',
       '**Errores:** todos los errores tienen la misma estructura (`success: false` + `error` con `code`, `message`, `status`, `details`, `path`, `method` y `timestamp`) y se describen con el schema `ErrorResponse`. Cualquier ruta inexistente responde 404 `ROUTE_NOT_FOUND`.',
       '',
-      '**Éxito:** los endpoints devuelven directamente el recurso (o una lista); al eliminar se devuelve `{ "message": "..." }`.',
+      '**Éxito:** los endpoints devuelven directamente el recurso (o una lista); al eliminar se devuelve `{ "message": "..." }`. Las cargas de archivos (`multipart/form-data`) responden 201 con `message`, los metadatos del archivo y la entidad actualizada.',
+      '',
+      '**Archivos:** se guardan en la carpeta de uploads del servidor (`documents`, `licenses`, `receipts`) y en la base solo se registran sus metadatos. Se aceptan PDF, JPG, PNG y WEBP de hasta 5 MB.',
     ].join('\n'),
   },
   servers: [{ url: `http://localhost:${config.port}`, description: 'Servidor local' }],
@@ -43,6 +46,7 @@ export const openApiSpec = {
     ...productsPaths,
     ...ordersPaths,
     ...deliveriesPaths,
+    ...uploadsPaths,
     ...mocksPaths,
     ...loggerPaths,
     ...healthPaths,

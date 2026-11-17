@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { DELIVERY_STATUS } from '../constants/index.js';
+import { fileSchema } from './file.schema.js';
 
 const deliverySchema = new mongoose.Schema(
   {
@@ -23,6 +24,8 @@ const deliverySchema = new mongoose.Schema(
     address: { type: String, required: true, trim: true },
     scheduledDate: { type: Date, required: true },
     deliveredAt: { type: Date, default: null },
+    // Metadatos de los comprobantes de entrega subidos
+    receipts: { type: [fileSchema], default: [] },
   },
   { timestamps: true }
 );

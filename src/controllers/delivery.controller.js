@@ -1,4 +1,5 @@
 import { DeliveryService } from '../services/delivery.service.js';
+import { UploadService } from '../services/upload.service.js';
 import { HTTP_STATUS } from '../constants/index.js';
 
 // Solo maneja req/res: delega todo al Service.
@@ -25,6 +26,15 @@ export const DeliveryController = {
     try {
       const delivery = await DeliveryService.updateStatus(req.params.id, req.body);
       res.status(HTTP_STATUS.OK).json(delivery);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async uploadReceipt(req, res, next) {
+    try {
+      const { receipt, delivery } = await UploadService.uploadDeliveryReceipt(req.params.id, req.file);
+      res.status(HTTP_STATUS.CREATED).json({ message: 'Comprobante cargado correctamente.', receipt, delivery });
     } catch (error) {
       next(error);
     }

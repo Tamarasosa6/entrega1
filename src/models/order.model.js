@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { ORDER_STATUS, ORDER_PRIORITY } from '../constants/index.js';
+import { fileSchema } from './file.schema.js';
 
 const orderItemSchema = new mongoose.Schema(
   {
@@ -33,6 +34,8 @@ const orderSchema = new mongoose.Schema(
       default: ORDER_PRIORITY.NORMAL,
     },
     shippingAddress: { type: String, required: true, trim: true },
+    // Metadatos de los comprobantes subidos para este pedido
+    receipts: { type: [fileSchema], default: [] },
   },
   { timestamps: true }
 );

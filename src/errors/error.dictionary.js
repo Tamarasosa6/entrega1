@@ -28,6 +28,14 @@ export const ERROR_CODES = Object.freeze({
   MOCK_SEED_FAILED: 'MOCK_SEED_FAILED',
   // Logger
   LOGGER_TEST_DISABLED: 'LOGGER_TEST_DISABLED',
+  // Archivos
+  FILE_REQUIRED: 'FILE_REQUIRED',
+  INVALID_FILE_TYPE: 'INVALID_FILE_TYPE',
+  FILE_TOO_LARGE: 'FILE_TOO_LARGE',
+  UNEXPECTED_FILE_FIELD: 'UNEXPECTED_FILE_FIELD',
+  INVALID_DOCUMENT_TYPE: 'INVALID_DOCUMENT_TYPE',
+  INVALID_UPLOAD: 'INVALID_UPLOAD',
+  FILE_SAVE_FAILED: 'FILE_SAVE_FAILED',
 });
 
 // Motivos posibles de INVALID_QUANTITY (viajan en error.details.reason)
@@ -132,5 +140,35 @@ export const ERROR_DICTIONARY = Object.freeze({
     status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     message: (d) =>
       `No se pudo completar la carga de datos de prueba (${d.entity}). Puede haber quedado una carga parcial.`,
+  },
+  [ERROR_CODES.FILE_REQUIRED]: {
+    status: HTTP_STATUS.BAD_REQUEST,
+    message: (d) => `Es obligatorio adjuntar un archivo en el campo "${d.field}" (multipart/form-data).`,
+  },
+  [ERROR_CODES.INVALID_FILE_TYPE]: {
+    status: HTTP_STATUS.BAD_REQUEST,
+    message: (d) =>
+      `Tipo de archivo no permitido (${d.received}). Tipos aceptados: ${list(d.allowed)}.`,
+  },
+  [ERROR_CODES.FILE_TOO_LARGE]: {
+    status: HTTP_STATUS.PAYLOAD_TOO_LARGE,
+    message: (d) => `El archivo supera el tamaño máximo permitido de ${d.maxSizeMB} MB.`,
+  },
+  [ERROR_CODES.UNEXPECTED_FILE_FIELD]: {
+    status: HTTP_STATUS.BAD_REQUEST,
+    message: (d) => `El archivo se envió en el campo "${d.received}", pero se esperaba "${d.expected}".`,
+  },
+  [ERROR_CODES.INVALID_DOCUMENT_TYPE]: {
+    status: HTTP_STATUS.BAD_REQUEST,
+    message: (d) =>
+      `Tipo de documento inválido "${d.received}". Valores permitidos: ${list(d.allowed)}.`,
+  },
+  [ERROR_CODES.INVALID_UPLOAD]: {
+    status: HTTP_STATUS.BAD_REQUEST,
+    message: 'No se pudo procesar la carga: el formulario multipart/form-data es inválido.',
+  },
+  [ERROR_CODES.FILE_SAVE_FAILED]: {
+    status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    message: 'No se pudo guardar el archivo en el servidor.',
   },
 });

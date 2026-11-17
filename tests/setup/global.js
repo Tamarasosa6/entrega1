@@ -3,14 +3,17 @@
 import './env.js';
 import '../../src/app.js'; // registra todos los modelos de Mongoose
 import { connectTestDatabase, clearDatabase, disconnectTestDatabase } from '../helpers/db.js';
+import { resetUploads } from '../helpers/uploads.js';
 
 // Hooks globales: se conectan a la base de testing una sola vez y la dejan limpia al terminar.
 before(async () => {
   await connectTestDatabase();
   await clearDatabase();
+  resetUploads();
 });
 
 after(async () => {
   await clearDatabase();
+  resetUploads(); // la carpeta de uploads de testing no queda en el disco
   await disconnectTestDatabase();
 });

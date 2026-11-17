@@ -151,3 +151,52 @@ export class MockSeedError extends AppError {
     return cause?.name ?? 'UNKNOWN';
   }
 }
+
+// ----- Archivos -----
+
+export class FileRequiredError extends AppError {
+  constructor(field) {
+    super(ERROR_CODES.FILE_REQUIRED, { field });
+  }
+}
+
+// received: tipo MIME y extensión informados por el cliente
+export class InvalidFileTypeError extends AppError {
+  constructor(received, allowed) {
+    super(ERROR_CODES.INVALID_FILE_TYPE, { received, allowed });
+  }
+}
+
+export class FileTooLargeError extends AppError {
+  constructor(maxSizeBytes) {
+    super(ERROR_CODES.FILE_TOO_LARGE, {
+      maxSizeBytes,
+      maxSizeMB: Math.round((maxSizeBytes / (1024 * 1024)) * 100) / 100,
+    });
+  }
+}
+
+export class UnexpectedFileFieldError extends AppError {
+  constructor(received, expected) {
+    super(ERROR_CODES.UNEXPECTED_FILE_FIELD, { received: String(received), expected });
+  }
+}
+
+export class InvalidDocumentTypeError extends AppError {
+  constructor(received, allowed) {
+    super(ERROR_CODES.INVALID_DOCUMENT_TYPE, { received: String(received), allowed });
+  }
+}
+
+export class InvalidUploadError extends AppError {
+  constructor() {
+    super(ERROR_CODES.INVALID_UPLOAD);
+  }
+}
+
+// Falla al escribir en disco: se conserva el error original como `cause`.
+export class FileSaveError extends AppError {
+  constructor(cause) {
+    super(ERROR_CODES.FILE_SAVE_FAILED, null, { cause });
+  }
+}

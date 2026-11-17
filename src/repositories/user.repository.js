@@ -48,6 +48,16 @@ export const UserRepository = {
     }).lean();
   },
 
+  // Agrega los metadatos de un documento al usuario y devuelve el usuario actualizado.
+  async addDocument(id, metadata) {
+    if (!mongoose.isValidObjectId(id)) return null;
+    return UserModel.findByIdAndUpdate(
+      id,
+      { $push: { documents: metadata } },
+      { new: true, runValidators: true, projection: SAFE_PROJECTION }
+    ).lean();
+  },
+
   async delete(id) {
     if (!mongoose.isValidObjectId(id)) return null;
     return UserModel.findByIdAndDelete(id, { projection: SAFE_PROJECTION }).lean();

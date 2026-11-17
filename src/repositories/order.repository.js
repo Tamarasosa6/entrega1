@@ -30,6 +30,16 @@ export const OrderRepository = {
     ).lean();
   },
 
+  // Agrega los metadatos de un comprobante al pedido y devuelve el pedido actualizado.
+  async addReceipt(id, metadata) {
+    if (!mongoose.isValidObjectId(id)) return null;
+    return OrderModel.findByIdAndUpdate(
+      id,
+      { $push: { receipts: metadata } },
+      { new: true, runValidators: true, projection: DEFAULT_PROJECTION }
+    ).lean();
+  },
+
   async insertMany(orders) {
     const inserted = await OrderModel.insertMany(orders);
     return inserted.length;

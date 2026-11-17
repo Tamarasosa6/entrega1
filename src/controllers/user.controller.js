@@ -1,4 +1,5 @@
 import { UserService } from '../services/user.service.js';
+import { UploadService } from '../services/upload.service.js';
 import { HTTP_STATUS } from '../constants/index.js';
 
 // Solo maneja req/res: delega todo al Service.
@@ -43,6 +44,15 @@ export const UserController = {
     try {
       await UserService.delete(req.params.id);
       res.status(HTTP_STATUS.OK).json({ message: 'Usuario eliminado.' });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async uploadDocument(req, res, next) {
+    try {
+      const { document, user } = await UploadService.uploadUserDocument(req.params.id, req.file, req.body);
+      res.status(HTTP_STATUS.CREATED).json({ message: 'Documento cargado correctamente.', document, user });
     } catch (error) {
       next(error);
     }
